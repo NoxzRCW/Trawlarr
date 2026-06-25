@@ -143,15 +143,56 @@ async def movie_detail(tmdb_id: int) -> Any:
 
 
 # ----------------------- Search / discover -----------------------
-async def _annotate_with_radarr(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Mark each result with whether it already exists in the Radarr library."""
+# Target number of results per page returned to the client. When hide_owned is
+# active we fetch several upstream TMDB pages and accumulate until we reach this.
+PAGE_SIZE = 20
+# Safety cap so a request never fetches an unbounded number of TMDB pages.
+MAX_PAGES_PER_REQUEST = 12
+
+
+async def _paginate_filtered(
+    fetch_page: Any,
+    hide_owned: bool,
+    start_page: int,
+) -> dict[str, Any]:
+    """Fetch upstream pages starting at `start_page`, annotate with Radarr
+    ownership and (optionally) drop owned movies, accumulating results until a
+    full page is reached. Returns a cursor (`next_page`) for the following page."""
     try:
         existing = await radarr.existing_tmdb_ids()
     except RadarrError:
         existing = set()
-    for m in results:
-        m["in_radarr"] = m.get("id") in existing
-    return results
+
+    collected: list[dict[str, Any]] = []
+    tmdb_page = max(start_page, 1)
+    total_pages = 1
+    total_results = 0
+    pages_fetched = 0
+
+    while True:
+        data = await fetch_page(tmdb_page)
+        total_pages = min(data.get("total_pages", 1) or 1, 500)
+        total_results = data.get("total_results", 0)
+        for m in data.get("results", []):
+            m["in_radarr"] = m.get("id") in existing
+            if not (hide_owned and m["in_radarr"]):
+                collected.append(m)
+        pages_fetched += 1
+        tmdb_page += 1
+        if len(collected) >= PAGE_SIZE:
+            break
+        if tmdb_page > total_pages:
+            break
+        if pages_fetched >= MAX_PAGES_PER_REQUEST:
+            break
+
+    return {
+        "results": collected,
+        "next_page": tmdb_page,
+        "has_more": tmdb_page <= total_pages,
+        "total_results": total_results,
+        "total_pages": total_pages,
+    }
 
 
 @app.get("/api/search")
@@ -160,10 +201,12 @@ async def text_search(
     page: int = 1,
     year: int | None = None,
     include_adult: bool = False,
+    hide_owned: bool = False,
 ) -> Any:
-    data = await tmdb.search_movie(query, page=page, year=year, include_adult=include_adult)
-    data["results"] = await _annotate_with_radarr(data.get("results", []))
-    return data
+    async def fetch_page(p: int) -> dict[str, Any]:
+        return await tmdb.search_movie(query, page=p, year=year, include_adult=include_adult)
+
+    return await _paginate_filtered(fetch_page, hide_owned, page)
 
 
 @app.get("/api/discover")
@@ -171,11 +214,15 @@ async def discover(request: Request) -> Any:
     """Advanced search. Accepts every TMDB /discover/movie parameter as a query string."""
     filters: dict[str, Any] = {}
     for key, value in request.query_params.items():
-        if key in DISCOVER_PARAMS:
+        if key in DISCOVER_PARAMS and key != "page":
             filters[key] = value
-    data = await tmdb.discover_movie(filters)
-    data["results"] = await _annotate_with_radarr(data.get("results", []))
-    return data
+    hide_owned = request.query_params.get("hide_owned") == "true"
+    start_page = int(request.query_params.get("page", 1) or 1)
+
+    async def fetch_page(p: int) -> dict[str, Any]:
+        return await tmdb.discover_movie({**filters, "page": p})
+
+    return await _paginate_filtered(fetch_page, hide_owned, start_page)
 
 
 # ----------------------- Radarr -----------------------

@@ -10,8 +10,12 @@ const state = {
   config: null,
   imageBase: "https://image.tmdb.org/t/p",
   mode: "discover",
-  page: 1,
-  totalPages: 1,
+  page: 1,            // TMDB start page (cursor) for the current request
+  viewPage: 1,        // page number shown to the user
+  cursorStack: [],    // history of start pages, for the "Précédent" button
+  nextPage: null,     // cursor for the next page, returned by the backend
+  hasMore: false,
+  totalResults: 0,
   // selections
   genres: new Map(),       // id -> "include" | "exclude"
   people: new Map(),       // id -> name
@@ -22,7 +26,6 @@ const state = {
   folders: [],
   pendingMovie: null,
   hideOwned: false,
-  lastResults: [],
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -157,6 +160,7 @@ function buildDiscoverParams() {
 
   add("sort_by", $("#f-sort").value);
   add("page", state.page);
+  if (state.hideOwned) add("hide_owned", "true");
   if ($("#f-adult").checked) add("include_adult", "true");
 
   const inc = [...state.genres].filter(([, m]) => m === "include").map(([id]) => id);
@@ -198,6 +202,14 @@ function buildDiscoverParams() {
 }
 
 // ----------------------- search -----------------------
+// Start a brand-new search: reset the pagination cursor to the first page.
+function newSearch() {
+  state.page = 1;
+  state.viewPage = 1;
+  state.cursorStack = [];
+  search();
+}
+
 async function search() {
   $("#status").textContent = "Recherche…";
   $("#results").innerHTML = "";
@@ -209,13 +221,19 @@ async function search() {
       const params = new URLSearchParams({ query: q, page: state.page });
       if (val("#q-year")) params.set("year", val("#q-year"));
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
+      if (state.hideOwned) params.set("hide_owned", "true");
       data = await api(`/search?${params}`);
     } else {
       data = await api(`/discover?${buildDiscoverParams()}`);
     }
-    state.totalPages = Math.min(data.total_pages || 1, 500);
+    state.nextPage = data.next_page ?? null;
+    state.hasMore = !!data.has_more;
+    state.totalResults = data.total_results ?? (data.results || []).length;
     renderResults(data.results || []);
-    $("#status").textContent = `${data.total_results ?? data.results.length} résultat(s) · page ${data.page}/${state.totalPages}`;
+    const count = state.hideOwned
+      ? `${state.totalResults} résultat(s) au total (films possédés masqués)`
+      : `${state.totalResults} résultat(s)`;
+    $("#status").textContent = `${count} · page ${state.viewPage}`;
     renderPagination();
   } catch (e) {
     $("#status").textContent = "Erreur : " + e.message;
@@ -223,18 +241,10 @@ async function search() {
 }
 
 function renderResults(movies) {
-  state.lastResults = movies;
   const grid = $("#results");
   grid.innerHTML = "";
-  const shown = state.hideOwned ? movies.filter((m) => !m.in_radarr) : movies;
-  if (!shown.length) {
-    const msg = movies.length && state.hideOwned
-      ? "Tous les résultats de cette page sont déjà dans Radarr."
-      : "Aucun résultat.";
-    grid.innerHTML = `<p style='color:var(--muted)'>${msg}</p>`;
-    return;
-  }
-  shown.forEach((m) => {
+  if (!movies.length) { grid.innerHTML = "<p style='color:var(--muted)'>Aucun résultat.</p>"; return; }
+  movies.forEach((m) => {
     const card = el("div", "card");
     const img = el("img", "poster");
     img.src = m.poster_path ? `${state.imageBase}/w342${m.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
@@ -265,15 +275,27 @@ function renderResults(movies) {
 function renderPagination() {
   const box = $("#pagination");
   box.innerHTML = "";
-  if (state.totalPages <= 1) return;
+  const hasPrev = state.cursorStack.length > 0;
+  if (!hasPrev && !state.hasMore) return;
   const prev = el("button", null, "← Précédent");
-  prev.disabled = state.page <= 1;
-  prev.onclick = () => { state.page--; search(); window.scrollTo(0, 0); };
+  prev.disabled = !hasPrev;
+  prev.onclick = () => {
+    state.page = state.cursorStack.pop();
+    state.viewPage--;
+    search();
+    window.scrollTo(0, 0);
+  };
   const next = el("button", null, "Suivant →");
-  next.disabled = state.page >= state.totalPages;
-  next.onclick = () => { state.page++; search(); window.scrollTo(0, 0); };
+  next.disabled = !state.hasMore;
+  next.onclick = () => {
+    state.cursorStack.push(state.page);
+    state.page = state.nextPage;
+    state.viewPage++;
+    search();
+    window.scrollTo(0, 0);
+  };
   box.appendChild(prev);
-  box.appendChild(el("span", null, `${state.page} / ${state.totalPages}`));
+  box.appendChild(el("span", null, `Page ${state.viewPage}`));
   box.appendChild(next);
 }
 
@@ -380,12 +402,12 @@ function bindUI() {
 
   $("#hide-owned").onchange = (e) => {
     state.hideOwned = e.target.checked;
-    renderResults(state.lastResults);
+    newSearch();
   };
 
-  $("#btn-search").onclick = () => { state.page = 1; search(); };
+  $("#btn-search").onclick = newSearch;
   $("#btn-reset").onclick = resetFilters;
-  $("#q-text").addEventListener("keydown", (e) => { if (e.key === "Enter") { state.page = 1; search(); } });
+  $("#q-text").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
 
   $("#modal-add").onclick = confirmAdd;
   $("#modal-cancel").onclick = () => $("#modal").classList.add("hidden");
