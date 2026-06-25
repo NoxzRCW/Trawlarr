@@ -80,5 +80,8 @@ class TMDBClient:
             {"append_to_response": "credits,videos,release_dates,watch/providers"},
         )
 
+    async def collection(self, collection_id: int) -> dict[str, Any]:
+        return await self._get(f"/collection/{collection_id}")
+
 
 tmdb = TMDBClient(settings.tmdb_api_key, settings.tmdb_language, settings.tmdb_region)

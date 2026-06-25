@@ -74,6 +74,7 @@ input[type="checkbox"] { width: auto; margin: 0; }
 .range-row { display: flex; gap: 8px; }
 .range-row input { margin-top: 0; }
 small { color: var(--muted); font-size: 11px; }
+.muted { color: var(--muted); font-size: 12px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .chip {

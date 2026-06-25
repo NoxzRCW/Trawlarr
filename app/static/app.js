@@ -277,14 +277,33 @@ function openModal(movie) {
   $("#modal-availability").value = d.minimum_availability;
   $("#modal-monitor").checked = d.monitor;
   $("#modal-searchnow").checked = d.search_on_add;
+  // Reset the collection option; reveal it only if the movie belongs to one.
+  $("#modal-collection-row").hidden = true;
+  $("#modal-collection").checked = false;
+  $("#modal-collection-name").textContent = "";
+  detectCollection(movie.id);
   $("#modal").classList.remove("hidden");
+}
+
+async function detectCollection(tmdbId) {
+  try {
+    const detail = await api(`/tmdb/movie/${tmdbId}`);
+    const coll = detail.belongs_to_collection;
+    // Ignore stale responses if the user already opened another movie.
+    if (!state.pendingMovie || state.pendingMovie.id !== tmdbId) return;
+    if (coll && coll.id) {
+      $("#modal-collection-name").textContent = `(${coll.name})`;
+      $("#modal-collection-row").hidden = false;
+    }
+  } catch (e) { /* collection detection is best-effort */ }
 }
 
 async function confirmAdd() {
   const btn = $("#modal-add");
   btn.disabled = true; btn.textContent = "Ajout…";
+  const addCollection = !$("#modal-collection-row").hidden && $("#modal-collection").checked;
   try {
-    await api("/radarr/add", {
+    const res = await api("/radarr/add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -294,9 +313,19 @@ async function confirmAdd() {
         minimum_availability: $("#modal-availability").value,
         monitor: $("#modal-monitor").checked,
         search_on_add: $("#modal-searchnow").checked,
+        add_collection: addCollection,
       }),
     });
-    toast(`"${state.pendingMovie.title}" ajouté à Radarr ✓`);
+    if (addCollection && res && Array.isArray(res.added)) {
+      const n = res.added.length;
+      const skipped = (res.skipped || []).length;
+      let msg = `${n} film(s) de la collection ajouté(s) ✓`;
+      if (skipped) msg += ` · ${skipped} déjà présent(s)`;
+      if (res.errors && res.errors.length) msg += ` · ${res.errors.length} échec(s)`;
+      toast(msg, !(res.errors && res.errors.length));
+    } else {
+      toast(`"${state.pendingMovie.title}" ajouté à Radarr ✓`);
+    }
     state.pendingMovie.in_radarr = true;
     $("#modal").classList.add("hidden");
     search();

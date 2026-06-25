@@ -209,14 +209,56 @@ async def add_to_radarr(payload: dict[str, Any]) -> Any:
             raise HTTPException(status_code=400, detail="No Radarr root folders available")
         root_folder = folders[0]["path"]
 
-    return await radarr.add_movie(
-        tmdb_id=int(tmdb_id),
-        quality_profile_id=int(quality_profile_id),
-        root_folder_path=root_folder,
-        monitored=payload.get("monitor", settings.radarr_monitor),
-        search_on_add=payload.get("search_on_add", settings.radarr_search_on_add),
-        minimum_availability=payload.get("minimum_availability", settings.radarr_minimum_availability),
-    )
+    monitored = payload.get("monitor", settings.radarr_monitor)
+    search_on_add = payload.get("search_on_add", settings.radarr_search_on_add)
+    minimum_availability = payload.get("minimum_availability", settings.radarr_minimum_availability)
+
+    # Build the list of TMDB ids to add. When add_collection is requested,
+    # resolve the movie's collection and queue every part that isn't in Radarr yet.
+    tmdb_ids = [int(tmdb_id)]
+    if payload.get("add_collection"):
+        try:
+            movie = await tmdb.movie(int(tmdb_id))
+            collection = movie.get("belongs_to_collection")
+            if collection and collection.get("id"):
+                details = await tmdb.collection(int(collection["id"]))
+                parts = [int(p["id"]) for p in details.get("parts", []) if p.get("id")]
+                # Keep the requested movie first, then the rest of the collection.
+                for pid in parts:
+                    if pid not in tmdb_ids:
+                        tmdb_ids.append(pid)
+        except Exception as e:  # noqa: BLE001 - collection lookup is best-effort
+            raise HTTPException(status_code=502, detail=f"Collection lookup failed: {e}")
+
+    existing = await radarr.existing_tmdb_ids() if len(tmdb_ids) > 1 else set()
+
+    added: list[dict[str, Any]] = []
+    skipped: list[int] = []
+    errors: list[dict[str, Any]] = []
+    for tid in tmdb_ids:
+        if tid != int(tmdb_id) and tid in existing:
+            skipped.append(tid)
+            continue
+        try:
+            result = await radarr.add_movie(
+                tmdb_id=tid,
+                quality_profile_id=int(quality_profile_id),
+                root_folder_path=root_folder,
+                monitored=monitored,
+                search_on_add=search_on_add,
+                minimum_availability=minimum_availability,
+            )
+            added.append(result)
+        except Exception as e:  # noqa: BLE001 - report per-movie failures
+            errors.append({"tmdb_id": tid, "error": str(e)})
+
+    # Single-movie add keeps the original behaviour: surface errors directly.
+    if len(tmdb_ids) == 1:
+        if errors:
+            raise HTTPException(status_code=502, detail=errors[0]["error"])
+        return added[0]
+
+    return {"added": added, "skipped": skipped, "errors": errors}
 
 
 # ----------------------- Static frontend (mounted last) -----------------------
