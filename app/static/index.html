@@ -8,13 +8,14 @@
 </head>
 <body>
   <header>
+    <button id="filter-toggle" class="filter-toggle" aria-label="Afficher/masquer les filtres">☰</button>
     <h1>🎬 Radarr Media Search</h1>
     <div id="health" class="health"></div>
   </header>
 
   <div class="layout">
     <!-- ===================== Filters sidebar ===================== -->
-    <aside class="filters">
+    <aside id="filters" class="filters">
       <div class="tabs">
         <button class="tab active" data-mode="discover">Filtres avancés</button>
         <button class="tab" data-mode="search">Recherche texte</button>

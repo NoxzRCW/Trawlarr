@@ -207,6 +207,7 @@ function newSearch() {
   state.page = 1;
   state.viewPage = 1;
   state.cursorStack = [];
+  if (state.closeFilters) state.closeFilters();
   search();
 }
 
@@ -389,7 +390,27 @@ function resetFilters() {
   renderSelected($("#f-company-selected"), state.companies);
 }
 
+function setupMobileFilters() {
+  const filters = $("#filters");
+  const toggle = $("#filter-toggle");
+  if (!filters || !toggle) return;
+  const backdrop = el("div", "filters-backdrop");
+  document.body.appendChild(backdrop);
+
+  const open = () => { filters.classList.add("open"); backdrop.classList.add("show"); };
+  const close = () => { filters.classList.remove("open"); backdrop.classList.remove("show"); };
+
+  toggle.onclick = () => {
+    if (filters.classList.contains("open")) close(); else open();
+  };
+  backdrop.onclick = close;
+  // Expose for closing the drawer after launching a search on mobile.
+  state.closeFilters = close;
+}
+
 function bindUI() {
+  setupMobileFilters();
+
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.onclick = () => {
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));

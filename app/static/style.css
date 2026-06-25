@@ -32,6 +32,12 @@ header {
   z-index: 10;
 }
 header h1 { font-size: 20px; margin: 0; }
+.filter-toggle {
+  display: none;
+  padding: 6px 12px; font-size: 18px; line-height: 1;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; cursor: pointer;
+}
 .health { font-size: 13px; color: var(--muted); }
 .health .pill { padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
 .pill.ok { background: rgba(76,175,80,.2); color: var(--ok); }
@@ -133,3 +139,49 @@ main { flex: 1; padding: 18px; }
   z-index: 100; font-size: 14px; }
 .toast.ok { background: var(--ok); color: #fff; }
 .toast.err { background: var(--danger); color: #fff; }
+
+/* ---- Mobile / responsive ---- */
+@media (max-width: 768px) {
+  header { padding: 12px 16px; gap: 10px; }
+  header h1 { font-size: 17px; flex: 1; }
+  .filter-toggle { display: block; }
+  .health { font-size: 12px; }
+
+  .layout { flex-direction: column; }
+
+  /* Off-canvas filter panel, hidden until the toggle opens it. */
+  .filters {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 88%;
+    max-width: 340px;
+    height: 100%;
+    z-index: 40;
+    border-right: 1px solid var(--border);
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+  }
+  .filters.open { transform: translateX(0); }
+
+  /* Dimmed backdrop behind the open panel. */
+  .filters-backdrop {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 35;
+  }
+  .filters-backdrop.show { display: block; }
+
+  main { padding: 14px; width: 100%; }
+  .grid {
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .results-toolbar { justify-content: flex-start; }
+  .pagination button { padding: 10px 16px; }
+}
+
+@media (max-width: 420px) {
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .card .overview { -webkit-line-clamp: 3; }
+}
