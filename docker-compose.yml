@@ -19,5 +19,3 @@ services:
       RADARR_MINIMUM_AVAILABILITY: ${RADARR_MINIMUM_AVAILABILITY:-released}
       RADARR_MONITOR: ${RADARR_MONITOR:-true}
       RADARR_SEARCH_ON_ADD: ${RADARR_SEARCH_ON_ADD:-true}
-    env_file:
-      - .env
