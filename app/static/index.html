@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radarr Media Search</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>🎬 Radarr Media Search</h1>
+    <div id="health" class="health"></div>
+  </header>
+
+  <div class="layout">
+    <!-- ===================== Filters sidebar ===================== -->
+    <aside class="filters">
+      <div class="tabs">
+        <button class="tab active" data-mode="discover">Filtres avancés</button>
+        <button class="tab" data-mode="search">Recherche texte</button>
+      </div>
+
+      <!-- Text search -->
+      <section id="panel-search" class="panel hidden">
+        <label>Titre du film
+          <input type="text" id="q-text" placeholder="ex: Inception" />
+        </label>
+        <label>Année <input type="number" id="q-year" placeholder="2010" /></label>
+        <label class="checkbox"><input type="checkbox" id="q-adult-search" /> Inclure contenu adulte</label>
+      </section>
+
+      <!-- Discover -->
+      <section id="panel-discover" class="panel">
+        <label>Trier par
+          <select id="f-sort">
+            <option value="popularity.desc">Popularité ↓</option>
+            <option value="popularity.asc">Popularité ↑</option>
+            <option value="primary_release_date.desc">Date de sortie ↓</option>
+            <option value="primary_release_date.asc">Date de sortie ↑</option>
+            <option value="vote_average.desc">Note ↓</option>
+            <option value="vote_average.asc">Note ↑</option>
+            <option value="vote_count.desc">Nb de votes ↓</option>
+            <option value="revenue.desc">Revenus ↓</option>
+            <option value="original_title.asc">Titre A→Z</option>
+          </select>
+        </label>
+
+        <fieldset>
+          <legend>Genres</legend>
+          <div id="f-genres" class="chips"></div>
+          <small>Clic = inclure · Maj+clic = exclure</small>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dates de sortie</legend>
+          <label>À partir du <input type="date" id="f-date-gte" /></label>
+          <label>Jusqu'au <input type="date" id="f-date-lte" /></label>
+          <label>Année exacte <input type="number" id="f-year" placeholder="2021" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Note (vote average)</legend>
+          <div class="range-row">
+            <input type="number" id="f-vote-gte" min="0" max="10" step="0.5" placeholder="min" />
+            <input type="number" id="f-vote-lte" min="0" max="10" step="0.5" placeholder="max" />
+          </div>
+          <label>Nb de votes min <input type="number" id="f-votecount-gte" placeholder="ex: 100" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Durée (minutes)</legend>
+          <div class="range-row">
+            <input type="number" id="f-runtime-gte" placeholder="min" />
+            <input type="number" id="f-runtime-lte" placeholder="max" />
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Langue & origine</legend>
+          <label>Langue originale
+            <select id="f-language">
+              <option value="">Toutes</option>
+              <option value="en">Anglais</option>
+              <option value="fr">Français</option>
+              <option value="ja">Japonais</option>
+              <option value="ko">Coréen</option>
+              <option value="es">Espagnol</option>
+              <option value="de">Allemand</option>
+              <option value="it">Italien</option>
+              <option value="zh">Chinois</option>
+              <option value="hi">Hindi</option>
+            </select>
+          </label>
+          <label>Pays d'origine (ISO) <input type="text" id="f-origin-country" placeholder="ex: US,FR" /></label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Certification (âge)</legend>
+          <label>Pays <input type="text" id="f-cert-country" placeholder="ex: FR / US" /></label>
+          <div class="range-row">
+            <input type="text" id="f-cert-gte" placeholder="min (ex: 12)" />
+            <input type="text" id="f-cert-lte" placeholder="max (ex: 16)" />
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Personnes (acteurs / réal.)</legend>
+          <input type="text" id="f-person-search" placeholder="Chercher une personne…" />
+          <div id="f-person-results" class="autocomplete"></div>
+          <div id="f-person-selected" class="chips selected"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mots-clés</legend>
+          <input type="text" id="f-keyword-search" placeholder="ex: superhero…" />
+          <div id="f-keyword-results" class="autocomplete"></div>
+          <div id="f-keyword-selected" class="chips selected"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Sociétés de production</legend>
+          <input type="text" id="f-company-search" placeholder="ex: Marvel Studios…" />
+          <div id="f-company-results" class="autocomplete"></div>
+          <div id="f-company-selected" class="chips selected"></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Plateformes de streaming</legend>
+          <div id="f-providers" class="chips"></div>
+          <label>Type
+            <select id="f-monetization">
+              <option value="">Tous</option>
+              <option value="flatrate">Abonnement</option>
+              <option value="free">Gratuit</option>
+              <option value="ads">Avec pub</option>
+              <option value="rent">Location</option>
+              <option value="buy">Achat</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <label class="checkbox"><input type="checkbox" id="f-adult" /> Inclure contenu adulte</label>
+      </section>
+
+      <div class="actions">
+        <button id="btn-search" class="primary">Rechercher</button>
+        <button id="btn-reset">Réinitialiser</button>
+      </div>
+    </aside>
+
+    <!-- ===================== Results ===================== -->
+    <main>
+      <div id="status" class="status"></div>
+      <div id="results" class="grid"></div>
+      <div id="pagination" class="pagination"></div>
+    </main>
+  </div>
+
+  <!-- Add-to-Radarr modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modal-title"></h3>
+      <label>Profil de qualité <select id="modal-profile"></select></label>
+      <label>Dossier racine <select id="modal-folder"></select></label>
+      <label>Disponibilité minimale
+        <select id="modal-availability">
+          <option value="announced">Annoncé</option>
+          <option value="inCinemas">En salle</option>
+          <option value="released" selected>Sorti</option>
+        </select>
+      </label>
+      <label class="checkbox"><input type="checkbox" id="modal-monitor" checked /> Surveiller</label>
+      <label class="checkbox"><input type="checkbox" id="modal-searchnow" checked /> Lancer la recherche maintenant</label>
+      <div class="actions">
+        <button id="modal-add" class="primary">Ajouter à Radarr</button>
+        <button id="modal-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
