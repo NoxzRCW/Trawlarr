@@ -21,6 +21,8 @@ const state = {
   profiles: [],
   folders: [],
   pendingMovie: null,
+  hideOwned: false,
+  lastResults: [],
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -221,10 +223,18 @@ async function search() {
 }
 
 function renderResults(movies) {
+  state.lastResults = movies;
   const grid = $("#results");
   grid.innerHTML = "";
-  if (!movies.length) { grid.innerHTML = "<p style='color:var(--muted)'>Aucun résultat.</p>"; return; }
-  movies.forEach((m) => {
+  const shown = state.hideOwned ? movies.filter((m) => !m.in_radarr) : movies;
+  if (!shown.length) {
+    const msg = movies.length && state.hideOwned
+      ? "Tous les résultats de cette page sont déjà dans Radarr."
+      : "Aucun résultat.";
+    grid.innerHTML = `<p style='color:var(--muted)'>${msg}</p>`;
+    return;
+  }
+  shown.forEach((m) => {
     const card = el("div", "card");
     const img = el("img", "poster");
     img.src = m.poster_path ? `${state.imageBase}/w342${m.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
@@ -367,6 +377,11 @@ function bindUI() {
       $("#panel-search").classList.toggle("hidden", state.mode !== "search");
     };
   });
+
+  $("#hide-owned").onchange = (e) => {
+    state.hideOwned = e.target.checked;
+    renderResults(state.lastResults);
+  };
 
   $("#btn-search").onclick = () => { state.page = 1; search(); };
   $("#btn-reset").onclick = resetFilters;

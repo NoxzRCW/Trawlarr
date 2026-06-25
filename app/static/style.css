@@ -99,6 +99,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---- Results ---- */
 main { flex: 1; padding: 18px; }
+.results-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.results-toolbar .checkbox { margin: 0; cursor: pointer; }
 .status { color: var(--muted); margin-bottom: 14px; min-height: 18px; }
 .grid {
   display: grid; gap: 16px;
