@@ -184,7 +184,9 @@ function buildDiscoverParams() {
   add("with_runtime.lte", val("#f-runtime-lte"));
 
   add("with_original_language", val("#f-language"));
-  add("with_origin_country", val("#f-origin-country"));
+  // Origin country as an OR condition: TMDB treats "," as AND and "|" as OR.
+  const originCountry = val("#f-origin-country");
+  if (originCountry) add("with_origin_country", originCountry.replace(/[,\s]+/g, "|"));
 
   const certCountry = val("#f-cert-country");
   if (certCountry) {
