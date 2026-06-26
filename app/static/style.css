@@ -105,8 +105,30 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ---- Results ---- */
 main { flex: 1; padding: 18px; }
-.results-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.results-toolbar { display: flex; justify-content: flex-end; align-items: center;
+  gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
 .results-toolbar .checkbox { margin: 0; cursor: pointer; }
+.results-toolbar label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
+.results-toolbar label.inline select { width: auto; margin: 0; }
+
+.selection-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+}
+.selection-bar #selection-count { font-size: 13px; color: var(--muted); }
+.selection-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.selection-actions button { padding: 7px 12px; }
+
+/* Selection checkbox overlaid on each poster */
+.card { position: relative; }
+.card.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.select-box {
+  position: absolute; top: 8px; left: 8px; z-index: 2;
+  width: 26px; height: 26px; margin: 0; cursor: pointer;
+  accent-color: var(--accent);
+  background: rgba(0,0,0,.5); border-radius: 6px;
+}
 .status { color: var(--muted); margin-bottom: 14px; min-height: 18px; }
 .grid {
   display: grid; gap: 16px;

@@ -26,6 +26,9 @@ const state = {
   folders: [],
   pendingMovie: null,
   hideOwned: false,
+  pageSize: 20,
+  selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
+  currentResults: [],    // movies shown on the current page
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -160,6 +163,7 @@ function buildDiscoverParams() {
 
   add("sort_by", $("#f-sort").value);
   add("page", state.page);
+  add("page_size", state.pageSize);
   if (state.hideOwned) add("hide_owned", "true");
   if ($("#f-adult").checked) add("include_adult", "true");
 
@@ -207,6 +211,7 @@ function newSearch() {
   state.page = 1;
   state.viewPage = 1;
   state.cursorStack = [];
+  state.selected.clear();
   if (state.closeFilters) state.closeFilters();
   search();
 }
@@ -223,6 +228,7 @@ async function search() {
       if (val("#q-year")) params.set("year", val("#q-year"));
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
       if (state.hideOwned) params.set("hide_owned", "true");
+      params.set("page_size", state.pageSize);
       data = await api(`/search?${params}`);
     } else {
       data = await api(`/discover?${buildDiscoverParams()}`);
@@ -242,15 +248,35 @@ async function search() {
 }
 
 function renderResults(movies) {
+  state.currentResults = movies;
   const grid = $("#results");
   grid.innerHTML = "";
-  if (!movies.length) { grid.innerHTML = "<p style='color:var(--muted)'>Aucun résultat.</p>"; return; }
+  if (!movies.length) {
+    grid.innerHTML = "<p style='color:var(--muted)'>Aucun résultat.</p>";
+    updateSelectionBar();
+    return;
+  }
   movies.forEach((m) => {
     const card = el("div", "card");
+    if (state.selected.has(m.id)) card.classList.add("selected");
     const img = el("img", "poster");
     img.src = m.poster_path ? `${state.imageBase}/w342${m.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
     img.loading = "lazy";
     card.appendChild(img);
+
+    // Selection checkbox (only for movies not already in Radarr).
+    if (!m.in_radarr) {
+      const box = el("input", "select-box");
+      box.type = "checkbox";
+      box.checked = state.selected.has(m.id);
+      box.title = "Sélectionner";
+      box.onchange = () => {
+        if (box.checked) state.selected.set(m.id, m); else state.selected.delete(m.id);
+        card.classList.toggle("selected", box.checked);
+        updateSelectionBar();
+      };
+      card.appendChild(box);
+    }
 
     const body = el("div", "body");
     body.appendChild(el("div", "title", m.title));
@@ -271,6 +297,23 @@ function renderResults(movies) {
     card.appendChild(body);
     grid.appendChild(card);
   });
+  updateSelectionBar();
+}
+
+// Movies on the current page that can still be selected (not in Radarr).
+function selectableOnPage() {
+  return state.currentResults.filter((m) => !m.in_radarr);
+}
+
+function updateSelectionBar() {
+  const bar = $("#selection-bar");
+  const selectable = selectableOnPage();
+  // Hide the bar entirely when there's nothing to select on this page.
+  bar.classList.toggle("hidden", selectable.length === 0 && state.selected.size === 0);
+  const n = state.selected.size;
+  $("#selection-count").textContent = `${n} sélectionné(s)`;
+  $("#add-selection").disabled = n === 0;
+  $("#add-selection").textContent = n ? `+ Ajouter la sélection (${n})` : "+ Ajouter la sélection";
 }
 
 function renderPagination() {
@@ -301,20 +344,35 @@ function renderPagination() {
 }
 
 // ----------------------- add to radarr modal -----------------------
-function openModal(movie) {
-  state.pendingMovie = movie;
-  $("#modal-title").textContent = `${movie.title} (${(movie.release_date || "").slice(0, 4)})`;
+function applyModalDefaults() {
   const d = state.config.defaults;
   if (d.quality_profile_id) $("#modal-profile").value = d.quality_profile_id;
   if (d.root_folder) $("#modal-folder").value = d.root_folder;
   $("#modal-availability").value = d.minimum_availability;
   $("#modal-monitor").checked = d.monitor;
   $("#modal-searchnow").checked = d.search_on_add;
-  // Reset the collection option; reveal it only if the movie belongs to one.
   $("#modal-collection-row").hidden = true;
   $("#modal-collection").checked = false;
   $("#modal-collection-name").textContent = "";
+}
+
+function openModal(movie) {
+  state.pendingMovie = movie;
+  state.bulkMovies = null;
+  $("#modal-title").textContent = `${movie.title} (${(movie.release_date || "").slice(0, 4)})`;
+  applyModalDefaults();
+  // Collection option only makes sense for a single movie.
   detectCollection(movie.id);
+  $("#modal").classList.remove("hidden");
+}
+
+function openBulkModal() {
+  const movies = [...state.selected.values()];
+  if (!movies.length) return;
+  state.pendingMovie = null;
+  state.bulkMovies = movies;
+  $("#modal-title").textContent = `Ajouter ${movies.length} film(s) sélectionné(s)`;
+  applyModalDefaults();
   $("#modal").classList.remove("hidden");
 }
 
@@ -331,7 +389,19 @@ async function detectCollection(tmdbId) {
   } catch (e) { /* collection detection is best-effort */ }
 }
 
+function modalOptions() {
+  return {
+    quality_profile_id: Number($("#modal-profile").value) || null,
+    root_folder: $("#modal-folder").value || null,
+    minimum_availability: $("#modal-availability").value,
+    monitor: $("#modal-monitor").checked,
+    search_on_add: $("#modal-searchnow").checked,
+  };
+}
+
 async function confirmAdd() {
+  if (state.bulkMovies) { await confirmBulkAdd(); return; }
+
   const btn = $("#modal-add");
   btn.disabled = true; btn.textContent = "Ajout…";
   const addCollection = !$("#modal-collection-row").hidden && $("#modal-collection").checked;
@@ -341,11 +411,7 @@ async function confirmAdd() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tmdb_id: state.pendingMovie.id,
-        quality_profile_id: Number($("#modal-profile").value) || null,
-        root_folder: $("#modal-folder").value || null,
-        minimum_availability: $("#modal-availability").value,
-        monitor: $("#modal-monitor").checked,
-        search_on_add: $("#modal-searchnow").checked,
+        ...modalOptions(),
         add_collection: addCollection,
       }),
     });
@@ -367,6 +433,35 @@ async function confirmAdd() {
   } finally {
     btn.disabled = false; btn.textContent = "Ajouter à Radarr";
   }
+}
+
+async function confirmBulkAdd() {
+  const movies = state.bulkMovies;
+  const btn = $("#modal-add");
+  btn.disabled = true;
+  const opts = modalOptions();
+  let ok = 0, fail = 0;
+  for (let i = 0; i < movies.length; i++) {
+    btn.textContent = `Ajout… (${i + 1}/${movies.length})`;
+    try {
+      await api("/radarr/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdb_id: movies[i].id, ...opts }),
+      });
+      movies[i].in_radarr = true;
+      state.selected.delete(movies[i].id);
+      ok++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  let msg = `${ok} film(s) ajouté(s) ✓`;
+  if (fail) msg += ` · ${fail} échec(s)`;
+  toast(msg, fail === 0);
+  $("#modal").classList.add("hidden");
+  btn.disabled = false; btn.textContent = "Ajouter à Radarr";
+  search();
 }
 
 // ----------------------- helpers / UI binding -----------------------
@@ -425,6 +520,21 @@ function bindUI() {
     state.hideOwned = e.target.checked;
     newSearch();
   };
+
+  $("#page-size").onchange = (e) => {
+    state.pageSize = Number(e.target.value) || 20;
+    newSearch();
+  };
+
+  $("#select-all").onclick = () => {
+    selectableOnPage().forEach((m) => state.selected.set(m.id, m));
+    renderResults(state.currentResults);
+  };
+  $("#select-none").onclick = () => {
+    state.selected.clear();
+    renderResults(state.currentResults);
+  };
+  $("#add-selection").onclick = openBulkModal;
 
   $("#btn-search").onclick = newSearch;
   $("#btn-reset").onclick = resetFilters;

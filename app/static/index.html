@@ -153,6 +153,23 @@
     <main>
       <div class="results-toolbar">
         <label class="checkbox"><input type="checkbox" id="hide-owned" /> Masquer les films déjà dans Radarr</label>
+        <label class="inline">Par page
+          <select id="page-size">
+            <option value="20">20</option>
+            <option value="40">40</option>
+            <option value="60">60</option>
+            <option value="80">80</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+      </div>
+      <div id="selection-bar" class="selection-bar hidden">
+        <span id="selection-count">0 sélectionné(s)</span>
+        <div class="selection-actions">
+          <button id="select-all">Tout sélectionner</button>
+          <button id="select-none">Tout désélectionner</button>
+          <button id="add-selection" class="primary" disabled>+ Ajouter la sélection</button>
+        </div>
       </div>
       <div id="status" class="status"></div>
       <div id="results" class="grid"></div>
