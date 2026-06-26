@@ -159,26 +159,37 @@ def _resolve_page_size(raw: Any) -> int:
     return size if size in ALLOWED_PAGE_SIZES else DEFAULT_PAGE_SIZE
 
 
+# Number of results per page in the upstream TMDB API.
+TMDB_PAGE_SIZE = 20
+
+
 async def _paginate_filtered(
     fetch_page: Any,
     hide_owned: bool,
-    start_page: int,
+    start_cursor: int,
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> dict[str, Any]:
-    """Fetch upstream pages starting at `start_page`, annotate with Radarr
-    ownership and (optionally) drop owned movies, accumulating results until a
-    full page is reached. Returns a cursor (`next_page`) for the following page."""
+    """Return exactly `page_size` results (or fewer at the end), starting at the
+    absolute position `start_cursor` in the unfiltered TMDB result stream.
+
+    The cursor is an absolute item index (not a TMDB page number) so we can cut a
+    page at the exact size requested and resume mid-page on the next call — even
+    when `hide_owned` removes a variable number of items per upstream page."""
     try:
         existing = await radarr.existing_tmdb_ids()
     except RadarrError:
         existing = set()
 
     # Safety cap, scaled to the requested page size, so a request never fetches
-    # an unbounded number of TMDB pages (each upstream page holds ~20 results).
-    max_pages = max(12, (page_size // 20) * 6)
+    # an unbounded number of TMDB pages.
+    max_pages = max(12, (page_size // TMDB_PAGE_SIZE) * 6)
+
+    start_cursor = max(start_cursor, 0)
+    tmdb_page = start_cursor // TMDB_PAGE_SIZE + 1
+    skip = start_cursor % TMDB_PAGE_SIZE  # items to skip on the first fetched page
 
     collected: list[dict[str, Any]] = []
-    tmdb_page = max(start_page, 1)
+    position = start_cursor  # absolute index of the next item to process
     total_pages = 1
     total_results = 0
     pages_fetched = 0
@@ -187,23 +198,32 @@ async def _paginate_filtered(
         data = await fetch_page(tmdb_page)
         total_pages = min(data.get("total_pages", 1) or 1, 500)
         total_results = data.get("total_results", 0)
-        for m in data.get("results", []):
+        for m in data.get("results", [])[skip:]:
             m["in_radarr"] = m.get("id") in existing
-            if not (hide_owned and m["in_radarr"]):
-                collected.append(m)
+            position += 1
+            if hide_owned and m["in_radarr"]:
+                continue
+            collected.append(m)
+            if len(collected) >= page_size:
+                break
+        skip = 0
         pages_fetched += 1
-        tmdb_page += 1
         if len(collected) >= page_size:
             break
+        tmdb_page += 1
         if tmdb_page > total_pages:
             break
         if pages_fetched >= max_pages:
             break
 
+    # Effective number of reachable items (TMDB caps Discover at 500 pages).
+    effective_total = min(total_results, total_pages * TMDB_PAGE_SIZE)
+    has_more = position < effective_total
+
     return {
         "results": collected,
-        "next_page": tmdb_page,
-        "has_more": tmdb_page <= total_pages,
+        "next_cursor": position,
+        "has_more": has_more,
         "total_results": total_results,
         "total_pages": total_pages,
     }
@@ -212,7 +232,7 @@ async def _paginate_filtered(
 @app.get("/api/search")
 async def text_search(
     query: str,
-    page: int = 1,
+    cursor: int = 0,
     year: int | None = None,
     include_adult: bool = False,
     hide_owned: bool = False,
@@ -223,7 +243,7 @@ async def text_search(
     async def fetch_page(p: int) -> dict[str, Any]:
         return await tmdb.search_movie(query, page=p, year=year, include_adult=include_adult)
 
-    return await _paginate_filtered(fetch_page, hide_owned, page, size)
+    return await _paginate_filtered(fetch_page, hide_owned, cursor, size)
 
 
 @app.get("/api/discover")
@@ -234,13 +254,13 @@ async def discover(request: Request) -> Any:
         if key in DISCOVER_PARAMS and key != "page":
             filters[key] = value
     hide_owned = request.query_params.get("hide_owned") == "true"
-    start_page = int(request.query_params.get("page", 1) or 1)
+    start_cursor = int(request.query_params.get("cursor", 0) or 0)
     size = _resolve_page_size(request.query_params.get("page_size"))
 
     async def fetch_page(p: int) -> dict[str, Any]:
         return await tmdb.discover_movie({**filters, "page": p})
 
-    return await _paginate_filtered(fetch_page, hide_owned, start_page, size)
+    return await _paginate_filtered(fetch_page, hide_owned, start_cursor, size)
 
 
 # ----------------------- Radarr -----------------------

@@ -10,10 +10,10 @@ const state = {
   config: null,
   imageBase: "https://image.tmdb.org/t/p",
   mode: "discover",
-  page: 1,            // TMDB start page (cursor) for the current request
+  cursor: 0,          // absolute item index where the current page starts
   viewPage: 1,        // page number shown to the user
-  cursorStack: [],    // history of start pages, for the "Précédent" button
-  nextPage: null,     // cursor for the next page, returned by the backend
+  cursorStack: [],    // history of start cursors, for the "Précédent" button
+  nextCursor: 0,      // cursor for the next page, returned by the backend
   hasMore: false,
   totalResults: 0,
   // selections
@@ -162,7 +162,7 @@ function buildDiscoverParams() {
   const add = (k, v) => { if (v != null && v !== "") p.set(k, v); };
 
   add("sort_by", $("#f-sort").value);
-  add("page", state.page);
+  add("cursor", state.cursor);
   add("page_size", state.pageSize);
   if (state.hideOwned) add("hide_owned", "true");
   if ($("#f-adult").checked) add("include_adult", "true");
@@ -208,7 +208,7 @@ function buildDiscoverParams() {
 // ----------------------- search -----------------------
 // Start a brand-new search: reset the pagination cursor to the first page.
 function newSearch() {
-  state.page = 1;
+  state.cursor = 0;
   state.viewPage = 1;
   state.cursorStack = [];
   state.selected.clear();
@@ -224,7 +224,7 @@ async function search() {
     if (state.mode === "search") {
       const q = val("#q-text");
       if (!q) { $("#status").textContent = "Saisissez un titre."; return; }
-      const params = new URLSearchParams({ query: q, page: state.page });
+      const params = new URLSearchParams({ query: q, cursor: state.cursor });
       if (val("#q-year")) params.set("year", val("#q-year"));
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
       if (state.hideOwned) params.set("hide_owned", "true");
@@ -233,7 +233,7 @@ async function search() {
     } else {
       data = await api(`/discover?${buildDiscoverParams()}`);
     }
-    state.nextPage = data.next_page ?? null;
+    state.nextCursor = data.next_cursor ?? 0;
     state.hasMore = !!data.has_more;
     state.totalResults = data.total_results ?? (data.results || []).length;
     renderResults(data.results || []);
@@ -324,7 +324,7 @@ function renderPagination() {
   const prev = el("button", null, "← Précédent");
   prev.disabled = !hasPrev;
   prev.onclick = () => {
-    state.page = state.cursorStack.pop();
+    state.cursor = state.cursorStack.pop();
     state.viewPage--;
     search();
     window.scrollTo(0, 0);
@@ -332,8 +332,8 @@ function renderPagination() {
   const next = el("button", null, "Suivant →");
   next.disabled = !state.hasMore;
   next.onclick = () => {
-    state.cursorStack.push(state.page);
-    state.page = state.nextPage;
+    state.cursorStack.push(state.cursor);
+    state.cursor = state.nextCursor;
     state.viewPage++;
     search();
     window.scrollTo(0, 0);
