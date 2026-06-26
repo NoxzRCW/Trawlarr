@@ -1,8 +1,13 @@
-# 🎬 Radarr Media Search
+# 🎬 Media Search
 
-Un site web auto-hébergé (Docker) qui s'intercale entre **l'API TMDB** et **l'API Radarr**
-pour offrir une recherche de films bien plus poussée que celle intégrée à Radarr —
-avec **tous les filtres TMDB Discover** — et un ajout en un clic vers ta bibliothèque Radarr.
+Un site web auto-hébergé (Docker) qui s'intercale entre **l'API TMDB** et les API
+**Radarr** (films) et **Sonarr** (séries) pour offrir une recherche bien plus poussée
+que celle intégrée — avec **tous les filtres TMDB Discover** — et un ajout en un clic
+vers ta bibliothèque Radarr ou Sonarr.
+
+Un sélecteur **Films / Séries** bascule l'ensemble de l'interface entre les deux
+bibliothèques. Comme Sonarr indexe les séries par identifiant **TVDB**, l'application
+fait automatiquement le pont TMDB → TVDB (via les `external_ids` de TMDB, avec cache).
 
 ## ✨ Fonctionnalités
 
@@ -20,9 +25,15 @@ avec **tous les filtres TMDB Discover** — et un ajout en un clic vers ta bibli
   - Plateformes de streaming (watch providers) + type (abonnement, location, achat…)
   - Contenu adulte (option)
 - **Recherche par titre** classique en complément.
-- Indication **« déjà dans Radarr »** sur chaque résultat.
-- **Ajout à Radarr** en un clic : choix du profil de qualité, du dossier racine,
-  de la disponibilité minimale, du monitoring et du lancement de recherche immédiat.
+- **Films (Radarr) ou Séries (Sonarr)** via un sélecteur en haut des filtres.
+- Indication **« déjà dans Radarr / Sonarr »** sur chaque résultat + option pour
+  masquer ceux déjà présents.
+- **Sélection multiple** (tout sélectionner / désélectionner) et **ajout groupé**.
+- **Nombre de résultats par page** configurable (20 → 100).
+- **Ajout à Radarr** en un clic : profil de qualité, dossier racine, disponibilité
+  minimale, monitoring, recherche immédiate, et option **ajouter toute la collection**.
+- **Ajout à Sonarr** en un clic : profil de qualité, dossier racine, monitoring,
+  recherche immédiate (toutes les saisons surveillées).
 - Les clés API restent **côté serveur** : le navigateur ne les voit jamais.
 
 ## 🚀 Démarrage rapide
@@ -30,7 +41,8 @@ avec **tous les filtres TMDB Discover** — et un ajout en un clic vers ta bibli
 1. Copie la configuration et renseigne tes valeurs :
    ```bash
    cp .env.example .env
-   # puis édite .env : TMDB_API_KEY, RADARR_URL, RADARR_API_KEY
+   # puis édite .env : TMDB_API_KEY, RADARR_URL, RADARR_API_KEY,
+   #                   SONARR_URL, SONARR_API_KEY (pour les séries)
    ```
 
 2. Lance le conteneur :

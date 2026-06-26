@@ -57,6 +57,13 @@ header h1 { font-size: 20px; margin: 0; }
   position: sticky;
   top: 57px;
 }
+.media-switch { display: flex; gap: 6px; margin-bottom: 12px; }
+.media-btn {
+  flex: 1; padding: 10px; background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.media-btn.active { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+
 .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
 .tab {
   flex: 1; padding: 8px; background: var(--panel-2); border: 1px solid var(--border);

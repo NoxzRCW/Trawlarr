@@ -9,6 +9,7 @@ const api = (path, opts) => fetch(`/api${path}`, opts).then(async (r) => {
 const state = {
   config: null,
   imageBase: "https://image.tmdb.org/t/p",
+  media: "movie",     // "movie" (Radarr) | "tv" (Sonarr)
   mode: "discover",
   cursor: 0,          // absolute item index where the current page starts
   viewPage: 1,        // page number shown to the user
@@ -25,6 +26,7 @@ const state = {
   profiles: [],
   folders: [],
   pendingMovie: null,
+  bulkMovies: null,
   hideOwned: false,
   pageSize: 20,
   selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
@@ -45,13 +47,56 @@ function toast(msg, ok = true) {
   setTimeout(() => t.remove(), 3500);
 }
 
+// ----------------------- media helpers -----------------------
+const isTv = () => state.media === "tv";
+// Library-membership flag set by the backend (Radarr for movies, Sonarr for series).
+const isOwned = (m) => (isTv() ? m.in_sonarr : m.in_radarr);
+const libName = () => (isTv() ? "Sonarr" : "Radarr");
+const paths = () => (isTv()
+  ? { discover: "/tv/discover", search: "/tv/search", genres: "/tmdb/tv/genres",
+      providers: "/tmdb/tv/watch-providers", profiles: "/sonarr/quality-profiles",
+      folders: "/sonarr/root-folders", add: "/sonarr/add" }
+  : { discover: "/discover", search: "/search", genres: "/tmdb/genres",
+      providers: "/tmdb/watch-providers", profiles: "/radarr/quality-profiles",
+      folders: "/radarr/root-folders", add: "/radarr/add" });
+const libDefaults = () => (isTv() ? state.config.sonarr_defaults : state.config.defaults) || {};
+
+// Adapt filter UI to the selected media type (TV has no people / certification
+// filters and uses first-air-date wording).
+function applyMediaUI() {
+  $("#fs-people").classList.toggle("hidden", isTv());
+  $("#fs-cert").classList.toggle("hidden", isTv());
+  $("#fs-dates-legend").textContent = isTv() ? "Première diffusion" : "Dates de sortie";
+  const sort = $("#f-sort");
+  const movieSort = [
+    ["popularity.desc", "Popularité ↓"], ["popularity.asc", "Popularité ↑"],
+    ["primary_release_date.desc", "Date de sortie ↓"], ["primary_release_date.asc", "Date de sortie ↑"],
+    ["vote_average.desc", "Note ↓"], ["vote_average.asc", "Note ↑"],
+    ["vote_count.desc", "Nb de votes ↓"], ["revenue.desc", "Revenus ↓"],
+    ["original_title.asc", "Titre A→Z"],
+  ];
+  const tvSort = [
+    ["popularity.desc", "Popularité ↓"], ["popularity.asc", "Popularité ↑"],
+    ["first_air_date.desc", "Première diffusion ↓"], ["first_air_date.asc", "Première diffusion ↑"],
+    ["vote_average.desc", "Note ↓"], ["vote_average.asc", "Note ↑"],
+    ["vote_count.desc", "Nb de votes ↓"], ["name.asc", "Titre A→Z"],
+  ];
+  sort.innerHTML = (isTv() ? tvSort : movieSort)
+    .map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+  $("#hide-owned-label").textContent = isTv()
+    ? "Masquer les séries déjà dans Sonarr"
+    : "Masquer les films déjà dans Radarr";
+  $("#q-text-label") && ($("#q-text-label").textContent = isTv() ? "Titre de la série" : "Titre du film");
+}
+
 // ----------------------- init -----------------------
 async function init() {
   state.config = await api("/config");
   state.imageBase = state.config.image_base;
   document.title = state.config.title;
 
-  await Promise.all([loadHealth(), loadGenres(), loadProviders(), loadRadarrOptions()]);
+  applyMediaUI();
+  await Promise.all([loadHealth(), loadGenres(), loadProviders(), loadLibraryOptions()]);
   bindUI();
   search();
 }
@@ -61,12 +106,14 @@ async function loadHealth() {
     const h = await api("/health");
     const tmdb = `TMDB <span class="pill ${h.tmdb ? "ok" : "ko"}">${h.tmdb ? "OK" : "KO"}</span>`;
     const rad = `Radarr <span class="pill ${h.radarr ? "ok" : "ko"}">${h.radarr ? (h.radarr_version || "OK") : "KO"}</span>`;
-    $("#health").innerHTML = tmdb + rad;
+    const son = `Sonarr <span class="pill ${h.sonarr ? "ok" : "ko"}">${h.sonarr ? (h.sonarr_version || "OK") : "KO"}</span>`;
+    $("#health").innerHTML = tmdb + rad + son;
   } catch (e) { $("#health").textContent = "Connexion impossible"; }
 }
 
 async function loadGenres() {
-  const { genres } = await api("/tmdb/genres");
+  state.genres.clear();
+  const { genres } = await api(paths().genres);
   const box = $("#f-genres");
   box.innerHTML = "";
   genres.forEach((g) => {
@@ -87,7 +134,8 @@ async function loadGenres() {
 }
 
 async function loadProviders() {
-  const { results } = await api("/tmdb/watch-providers");
+  state.providers.clear();
+  const { results } = await api(paths().providers);
   const box = $("#f-providers");
   box.innerHTML = "";
   (results || []).slice(0, 25).forEach((p) => {
@@ -105,16 +153,16 @@ async function loadProviders() {
   });
 }
 
-async function loadRadarrOptions() {
+async function loadLibraryOptions() {
   try {
-    state.profiles = await api("/radarr/quality-profiles");
-    state.folders = await api("/radarr/root-folders");
+    state.profiles = await api(paths().profiles);
+    state.folders = await api(paths().folders);
     $("#modal-profile").innerHTML = state.profiles
       .map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
     $("#modal-folder").innerHTML = state.folders
       .map((f) => `<option value="${f.path}">${f.path} (${fmtBytes(f.freeSpace)} libres)</option>`).join("");
   } catch (e) {
-    console.warn("Radarr options unavailable", e);
+    console.warn(`${libName()} options unavailable`, e);
   }
 }
 
@@ -172,9 +220,16 @@ function buildDiscoverParams() {
   if (inc.length) add("with_genres", inc.join(","));
   if (exc.length) add("without_genres", exc.join(","));
 
-  add("primary_release_date.gte", val("#f-date-gte"));
-  add("primary_release_date.lte", val("#f-date-lte"));
-  add("primary_release_year", val("#f-year"));
+  // Date fields differ between movies (release date) and series (first air date).
+  if (isTv()) {
+    add("first_air_date.gte", val("#f-date-gte"));
+    add("first_air_date.lte", val("#f-date-lte"));
+    add("first_air_date_year", val("#f-year"));
+  } else {
+    add("primary_release_date.gte", val("#f-date-gte"));
+    add("primary_release_date.lte", val("#f-date-lte"));
+    add("primary_release_year", val("#f-year"));
+  }
 
   add("vote_average.gte", val("#f-vote-gte"));
   add("vote_average.lte", val("#f-vote-lte"));
@@ -188,14 +243,17 @@ function buildDiscoverParams() {
   const originCountry = val("#f-origin-country");
   if (originCountry) add("with_origin_country", originCountry.replace(/[,\s]+/g, "|"));
 
-  const certCountry = val("#f-cert-country");
-  if (certCountry) {
-    add("certification_country", certCountry);
-    add("certification.gte", val("#f-cert-gte"));
-    add("certification.lte", val("#f-cert-lte"));
+  // Certification and people filters only apply to movies.
+  if (!isTv()) {
+    const certCountry = val("#f-cert-country");
+    if (certCountry) {
+      add("certification_country", certCountry);
+      add("certification.gte", val("#f-cert-gte"));
+      add("certification.lte", val("#f-cert-lte"));
+    }
+    if (state.people.size) add("with_people", [...state.people.keys()].join(","));
   }
 
-  if (state.people.size) add("with_people", [...state.people.keys()].join(","));
   if (state.keywords.size) add("with_keywords", [...state.keywords.keys()].join(","));
   if (state.companies.size) add("with_companies", [...state.companies.keys()].join(","));
 
@@ -231,17 +289,19 @@ async function search() {
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
       if (state.hideOwned) params.set("hide_owned", "true");
       params.set("page_size", state.pageSize);
-      data = await api(`/search?${params}`);
+      data = await api(`${paths().search}?${params}`);
     } else {
-      data = await api(`/discover?${buildDiscoverParams()}`);
+      data = await api(`${paths().discover}?${buildDiscoverParams()}`);
     }
     state.nextCursor = data.next_cursor ?? 0;
     state.hasMore = !!data.has_more;
     state.totalResults = data.total_results ?? (data.results || []).length;
     renderResults(data.results || []);
+    const noun = isTv() ? "série(s)" : "film(s)";
+    const owned = isTv() ? "séries possédées" : "films possédés";
     const count = state.hideOwned
-      ? `${state.totalResults} résultat(s) au total (films possédés masqués)`
-      : `${state.totalResults} résultat(s)`;
+      ? `${state.totalResults} ${noun} au total (${owned} masqué(e)s)`
+      : `${state.totalResults} ${noun}`;
     $("#status").textContent = `${count} · page ${state.viewPage}`;
     renderPagination();
   } catch (e) {
@@ -266,8 +326,8 @@ function renderResults(movies) {
     img.loading = "lazy";
     card.appendChild(img);
 
-    // Selection checkbox (only for movies not already in Radarr).
-    if (!m.in_radarr) {
+    // Selection checkbox (only for items not already in the library).
+    if (!isOwned(m)) {
       const box = el("input", "select-box");
       box.type = "checkbox";
       box.checked = state.selected.has(m.id);
@@ -281,16 +341,16 @@ function renderResults(movies) {
     }
 
     const body = el("div", "body");
-    body.appendChild(el("div", "title", m.title));
+    body.appendChild(el("div", "title", m.title || m.name));
     const meta = el("div", "meta");
-    const year = (m.release_date || "").slice(0, 4);
+    const year = (m.release_date || m.first_air_date || "").slice(0, 4);
     meta.appendChild(el("span", null, year || "—"));
     meta.appendChild(el("span", "rating", `★ ${(m.vote_average || 0).toFixed(1)}`));
     body.appendChild(meta);
     body.appendChild(el("div", "overview", m.overview || "Pas de description."));
 
-    if (m.in_radarr) {
-      body.appendChild(el("div", "badge-in", "✓ Déjà dans Radarr"));
+    if (isOwned(m)) {
+      body.appendChild(el("div", "badge-in", `✓ Déjà dans ${libName()}`));
     } else {
       const btn = el("button", "primary", "+ Ajouter");
       btn.onclick = () => openModal(m);
@@ -302,9 +362,9 @@ function renderResults(movies) {
   updateSelectionBar();
 }
 
-// Movies on the current page that can still be selected (not in Radarr).
+// Items on the current page that can still be selected (not in the library).
 function selectableOnPage() {
-  return state.currentResults.filter((m) => !m.in_radarr);
+  return state.currentResults.filter((m) => !isOwned(m));
 }
 
 function updateSelectionBar() {
@@ -345,26 +405,31 @@ function renderPagination() {
   box.appendChild(next);
 }
 
-// ----------------------- add to radarr modal -----------------------
+// ----------------------- add to library modal -----------------------
 function applyModalDefaults() {
-  const d = state.config.defaults;
+  const d = libDefaults();
   if (d.quality_profile_id) $("#modal-profile").value = d.quality_profile_id;
   if (d.root_folder) $("#modal-folder").value = d.root_folder;
-  $("#modal-availability").value = d.minimum_availability;
+  if (d.minimum_availability) $("#modal-availability").value = d.minimum_availability;
   $("#modal-monitor").checked = d.monitor;
   $("#modal-searchnow").checked = d.search_on_add;
+  // Minimum availability is a Radarr-only concept; collections are movie-only.
+  $("#modal-availability-row").hidden = isTv();
   $("#modal-collection-row").hidden = true;
   $("#modal-collection").checked = false;
   $("#modal-collection-name").textContent = "";
+  $("#modal-add").textContent = `Ajouter à ${libName()}`;
 }
 
 function openModal(movie) {
   state.pendingMovie = movie;
   state.bulkMovies = null;
-  $("#modal-title").textContent = `${movie.title} (${(movie.release_date || "").slice(0, 4)})`;
+  const title = movie.title || movie.name;
+  const year = (movie.release_date || movie.first_air_date || "").slice(0, 4);
+  $("#modal-title").textContent = year ? `${title} (${year})` : title;
   applyModalDefaults();
   // Collection option only makes sense for a single movie.
-  detectCollection(movie.id);
+  if (!isTv()) detectCollection(movie.id);
   $("#modal").classList.remove("hidden");
 }
 
@@ -373,7 +438,8 @@ function openBulkModal() {
   if (!movies.length) return;
   state.pendingMovie = null;
   state.bulkMovies = movies;
-  $("#modal-title").textContent = `Ajouter ${movies.length} film(s) sélectionné(s)`;
+  const noun = isTv() ? "série(s)" : "film(s)";
+  $("#modal-title").textContent = `Ajouter ${movies.length} ${noun} sélectionné(s)`;
   applyModalDefaults();
   $("#modal").classList.remove("hidden");
 }
@@ -392,23 +458,25 @@ async function detectCollection(tmdbId) {
 }
 
 function modalOptions() {
-  return {
+  const opts = {
     quality_profile_id: Number($("#modal-profile").value) || null,
     root_folder: $("#modal-folder").value || null,
-    minimum_availability: $("#modal-availability").value,
     monitor: $("#modal-monitor").checked,
     search_on_add: $("#modal-searchnow").checked,
   };
+  if (!isTv()) opts.minimum_availability = $("#modal-availability").value;
+  return opts;
 }
 
 async function confirmAdd() {
   if (state.bulkMovies) { await confirmBulkAdd(); return; }
 
   const btn = $("#modal-add");
+  const lib = libName();
   btn.disabled = true; btn.textContent = "Ajout…";
-  const addCollection = !$("#modal-collection-row").hidden && $("#modal-collection").checked;
+  const addCollection = !isTv() && !$("#modal-collection-row").hidden && $("#modal-collection").checked;
   try {
-    const res = await api("/radarr/add", {
+    const res = await api(paths().add, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -425,44 +493,48 @@ async function confirmAdd() {
       if (res.errors && res.errors.length) msg += ` · ${res.errors.length} échec(s)`;
       toast(msg, !(res.errors && res.errors.length));
     } else {
-      toast(`"${state.pendingMovie.title}" ajouté à Radarr ✓`);
+      const title = state.pendingMovie.title || state.pendingMovie.name;
+      toast(`"${title}" ajouté à ${lib} ✓`);
     }
-    state.pendingMovie.in_radarr = true;
+    if (isTv()) state.pendingMovie.in_sonarr = true; else state.pendingMovie.in_radarr = true;
     $("#modal").classList.add("hidden");
     search();
   } catch (e) {
     toast("Échec : " + e.message, false);
   } finally {
-    btn.disabled = false; btn.textContent = "Ajouter à Radarr";
+    btn.disabled = false; btn.textContent = `Ajouter à ${lib}`;
   }
 }
 
 async function confirmBulkAdd() {
   const movies = state.bulkMovies;
   const btn = $("#modal-add");
+  const lib = libName();
   btn.disabled = true;
   const opts = modalOptions();
+  const ownedKey = isTv() ? "in_sonarr" : "in_radarr";
   let ok = 0, fail = 0;
   for (let i = 0; i < movies.length; i++) {
     btn.textContent = `Ajout… (${i + 1}/${movies.length})`;
     try {
-      await api("/radarr/add", {
+      await api(paths().add, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tmdb_id: movies[i].id, ...opts }),
       });
-      movies[i].in_radarr = true;
+      movies[i][ownedKey] = true;
       state.selected.delete(movies[i].id);
       ok++;
     } catch (e) {
       fail++;
     }
   }
-  let msg = `${ok} film(s) ajouté(s) ✓`;
+  const noun = isTv() ? "série(s)" : "film(s)";
+  let msg = `${ok} ${noun} ajouté(s) ✓`;
   if (fail) msg += ` · ${fail} échec(s)`;
   toast(msg, fail === 0);
   $("#modal").classList.add("hidden");
-  btn.disabled = false; btn.textContent = "Ajouter à Radarr";
+  btn.disabled = false; btn.textContent = `Ajouter à ${lib}`;
   search();
 }
 
@@ -505,8 +577,24 @@ function setupMobileFilters() {
   state.closeFilters = close;
 }
 
+async function switchMedia(media) {
+  if (media === state.media) return;
+  state.media = media;
+  document.querySelectorAll(".media-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.media === media));
+  // Reset filters/selection that don't carry over between media types.
+  resetFilters();
+  applyMediaUI();
+  await Promise.all([loadGenres(), loadProviders(), loadLibraryOptions()]);
+  newSearch();
+}
+
 function bindUI() {
   setupMobileFilters();
+
+  document.querySelectorAll(".media-btn").forEach((btn) => {
+    btn.onclick = () => switchMedia(btn.dataset.media);
+  });
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.onclick = () => {

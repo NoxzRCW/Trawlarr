@@ -4,18 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=7" />
+  <link rel="stylesheet" href="/style.css?v=8" />
 </head>
 <body>
   <header>
     <button id="filter-toggle" class="filter-toggle" aria-label="Afficher/masquer les filtres">☰</button>
-    <h1>🎬 Radarr Media Search</h1>
+    <h1>🎬 Media Search</h1>
     <div id="health" class="health"></div>
   </header>
 
   <div class="layout">
     <!-- ===================== Filters sidebar ===================== -->
     <aside id="filters" class="filters">
+      <div class="media-switch">
+        <button class="media-btn active" data-media="movie">🎬 Films</button>
+        <button class="media-btn" data-media="tv">📺 Séries</button>
+      </div>
       <div class="tabs">
         <button class="tab active" data-mode="discover">Filtres avancés</button>
         <button class="tab" data-mode="search">Recherche texte</button>
@@ -52,8 +56,8 @@
           <small>Clic = inclure · Maj+clic = exclure</small>
         </fieldset>
 
-        <fieldset>
-          <legend>Dates de sortie</legend>
+        <fieldset id="fs-dates">
+          <legend id="fs-dates-legend">Dates de sortie</legend>
           <label>À partir du <input type="date" id="f-date-gte" /></label>
           <label>Jusqu'au <input type="date" id="f-date-lte" /></label>
           <label>Année exacte <input type="number" id="f-year" placeholder="2021" /></label>
@@ -95,7 +99,7 @@
           <label>Pays d'origine (ISO) <input type="text" id="f-origin-country" placeholder="ex: US, FR (= US ou FR)" /></label>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="fs-cert">
           <legend>Certification (âge)</legend>
           <label>Pays <input type="text" id="f-cert-country" placeholder="ex: FR / US" /></label>
           <div class="range-row">
@@ -104,7 +108,7 @@
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset id="fs-people">
           <legend>Personnes (acteurs / réal.)</legend>
           <input type="text" id="f-person-search" placeholder="Chercher une personne…" />
           <div id="f-person-results" class="autocomplete"></div>
@@ -152,7 +156,7 @@
     <!-- ===================== Results ===================== -->
     <main>
       <div class="results-toolbar">
-        <label class="checkbox"><input type="checkbox" id="hide-owned" /> Masquer les films déjà dans Radarr</label>
+        <label class="checkbox"><input type="checkbox" id="hide-owned" /> <span id="hide-owned-label">Masquer les films déjà dans Radarr</span></label>
         <label class="inline">Par page
           <select id="page-size">
             <option value="20">20</option>
@@ -183,7 +187,7 @@
       <h3 id="modal-title"></h3>
       <label>Profil de qualité <select id="modal-profile"></select></label>
       <label>Dossier racine <select id="modal-folder"></select></label>
-      <label>Disponibilité minimale
+      <label id="modal-availability-row">Disponibilité minimale
         <select id="modal-availability">
           <option value="announced">Annoncé</option>
           <option value="inCinemas">En salle</option>
@@ -200,6 +204,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=7"></script>
+  <script src="/app.js?v=8"></script>
 </body>
 </html>

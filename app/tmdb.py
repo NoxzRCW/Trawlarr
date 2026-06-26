@@ -55,6 +55,35 @@ class TMDBClient:
     async def search_person(self, query: str, page: int = 1) -> dict[str, Any]:
         return await self._get("/search/person", {"query": query, "page": page})
 
+    # ---- TV series ----
+    async def discover_tv(self, filters: dict[str, Any]) -> dict[str, Any]:
+        """Pass-through to /discover/tv. `filters` keys map 1:1 to TMDB params."""
+        params = dict(filters)
+        return await self._get("/discover/tv", params)
+
+    async def search_tv(self, query: str, page: int = 1, year: int | None = None,
+                        include_adult: bool = False) -> dict[str, Any]:
+        return await self._get(
+            "/search/tv",
+            {"query": query, "page": page, "first_air_date_year": year,
+             "include_adult": str(include_adult).lower()},
+        )
+
+    async def tv(self, tmdb_id: int) -> dict[str, Any]:
+        return await self._get(
+            f"/tv/{tmdb_id}",
+            {"append_to_response": "external_ids,credits,videos,watch/providers"},
+        )
+
+    async def tv_external_ids(self, tmdb_id: int) -> dict[str, Any]:
+        return await self._get(f"/tv/{tmdb_id}/external_ids")
+
+    async def tv_genres(self) -> dict[str, Any]:
+        return await self._get("/genre/tv/list")
+
+    async def tv_watch_providers(self) -> dict[str, Any]:
+        return await self._get("/watch/providers/tv", {"watch_region": self.region})
+
     async def search_company(self, query: str, page: int = 1) -> dict[str, Any]:
         return await self._get("/search/company", {"query": query, "page": page})
 
