@@ -349,6 +349,10 @@ function renderResults(movies) {
     body.appendChild(meta);
     body.appendChild(el("div", "overview", m.overview || "Pas de description."));
 
+    const detailBtn = el("button", "detail-btn", "ⓘ Détails");
+    detailBtn.onclick = () => openDetails(m);
+    body.appendChild(detailBtn);
+
     if (isOwned(m)) {
       body.appendChild(el("div", "badge-in", `✓ Déjà dans ${libName()}`));
     } else {
@@ -538,6 +542,363 @@ async function confirmBulkAdd() {
   search();
 }
 
+// ----------------------- details modal -----------------------
+const IMG = (path, size) => (path ? `${state.imageBase}/${size}${path}` : null);
+const fmtDate = (s) => {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+};
+const fmtMoney = (n) => (n ? n.toLocaleString("fr-FR") + " $" : null);
+const fmtBool = (b) => (b ? "Oui" : "Non");
+
+function detailSection(title) {
+  const s = el("div", "detail-section");
+  s.appendChild(el("h3", null, title));
+  return s;
+}
+function fact(k, v) {
+  if (v == null || v === "" || (Array.isArray(v) && !v.length)) return null;
+  const f = el("div", "fact");
+  f.appendChild(el("span", "k", k));
+  f.appendChild(el("span", "v", Array.isArray(v) ? v.join(", ") : String(v)));
+  return f;
+}
+
+async function openDetails(m, mediaType) {
+  const tv = mediaType ? mediaType === "tv" : isTv();
+  const modal = $("#detail-modal");
+  const body = $("#detail-body");
+  body.innerHTML = `<div class="detail-loading">Chargement…</div>`;
+  modal.classList.remove("hidden");
+  modal.scrollTop = 0;
+  try {
+    const d = await api(`${tv ? "/tmdb/tv" : "/tmdb/movie"}/${m.id}`);
+    renderDetails(d, tv);
+    $(".detail-content").scrollTop = 0;
+  } catch (e) {
+    body.innerHTML = `<div class="detail-loading">Erreur : ${e.message}</div>`;
+  }
+}
+
+function renderDetails(d, tv) {
+  const region = state.config.region;
+  const title = d.title || d.name;
+  const orig = d.original_title || d.original_name;
+  const year = (d.release_date || d.first_air_date || "").slice(0, 4);
+  const wrap = el("div");
+
+  // ---- Hero / head ----
+  const backdrop = IMG(d.backdrop_path, "w1280");
+  const hero = el("div", "detail-hero" + (backdrop ? "" : " no-backdrop"));
+  if (backdrop) { const b = el("img", "backdrop"); b.src = backdrop; hero.appendChild(b); }
+  wrap.appendChild(hero);
+
+  const head = el("div", "detail-head");
+  const poster = IMG(d.poster_path, "w342");
+  const pImg = el("img", "poster");
+  if (poster) pImg.src = poster;
+  head.appendChild(pImg);
+
+  const info = el("div", "head-info");
+  info.appendChild(el("h2", null, year ? `${title} (${year})` : title));
+  if (orig && orig !== title) info.appendChild(el("div", "orig", `Titre original : ${orig}`));
+  if (d.tagline) info.appendChild(el("div", "tagline", `« ${d.tagline} »`));
+
+  const hm = el("div", "head-meta");
+  hm.appendChild(el("span", "score", `★ ${(d.vote_average || 0).toFixed(1)}`));
+  hm.appendChild(el("span", null, `${d.vote_count || 0} votes`));
+  if (!tv && d.runtime) hm.appendChild(el("span", null, `${d.runtime} min`));
+  if (tv) {
+    if (d.number_of_seasons) hm.appendChild(el("span", null, `${d.number_of_seasons} saison(s)`));
+    if (d.number_of_episodes) hm.appendChild(el("span", null, `${d.number_of_episodes} épisode(s)`));
+  }
+  const cert = certification(d, tv, region);
+  if (cert) hm.appendChild(el("span", null, `🔞 ${cert}`));
+  if (d.status) hm.appendChild(el("span", null, d.status));
+  info.appendChild(hm);
+
+  if (d.genres && d.genres.length) {
+    const g = el("div", "genre-chips");
+    d.genres.forEach((x) => g.appendChild(el("span", "chip", x.name)));
+    info.appendChild(g);
+  }
+  head.appendChild(info);
+  wrap.appendChild(head);
+
+  // ---- Body sections ----
+  const inner = el("div", "detail-body-inner");
+
+  // Synopsis
+  if (d.overview) {
+    const s = detailSection("Synopsis");
+    s.appendChild(el("p", "overview-text", d.overview));
+    inner.appendChild(s);
+  }
+
+  // Facts
+  const facts = el("div", "facts");
+  const addF = (k, v) => { const f = fact(k, v); if (f) facts.appendChild(f); };
+  if (tv) {
+    addF("Première diffusion", fmtDate(d.first_air_date));
+    addF("Dernière diffusion", fmtDate(d.last_air_date));
+    addF("En production", fmtBool(d.in_production));
+    addF("Type", d.type);
+    addF("Durée d'un épisode", (d.episode_run_time || []).map((x) => `${x} min`).join(", "));
+    addF("Réseaux", (d.networks || []).map((n) => n.name));
+    addF("Créé par", (d.created_by || []).map((c) => c.name));
+    addF("Pays d'origine", d.origin_country);
+  } else {
+    addF("Date de sortie", fmtDate(d.release_date));
+    addF("Budget", fmtMoney(d.budget));
+    addF("Recettes", fmtMoney(d.revenue));
+    addF("Pays de production", (d.production_countries || []).map((c) => c.name));
+    if (d.belongs_to_collection) addF("Collection", d.belongs_to_collection.name);
+  }
+  addF("Statut", d.status);
+  addF("Langue originale", (d.original_language || "").toUpperCase());
+  addF("Langues parlées", (d.spoken_languages || []).map((l) => l.english_name || l.name));
+  addF("Popularité", d.popularity ? Math.round(d.popularity) : null);
+  addF("Note moyenne TMDB", `${(d.vote_average || 0).toFixed(2)} / 10`);
+  if (facts.children.length) {
+    const s = detailSection("Informations");
+    s.appendChild(facts);
+    inner.appendChild(s);
+  }
+
+  // Seasons (tv)
+  if (tv && (d.seasons || []).length) {
+    const s = detailSection("Saisons");
+    const row = el("div", "poster-row");
+    d.seasons.forEach((se) => {
+      const mini = el("div", "mini");
+      const ip = IMG(se.poster_path, "w185");
+      const im = el("img"); if (ip) im.src = ip; else im.className = "ph";
+      mini.appendChild(im);
+      const ep = se.episode_count ? ` · ${se.episode_count} ép.` : "";
+      const sy = (se.air_date || "").slice(0, 4);
+      mini.appendChild(el("div", "nm", `${se.name}${sy ? ` (${sy})` : ""}${ep}`));
+      mini.style.cursor = "default";
+      row.appendChild(mini);
+    });
+    s.appendChild(row);
+    inner.appendChild(s);
+  }
+
+  // Cast
+  const cast = (tv ? (d.aggregate_credits?.cast || d.credits?.cast) : d.credits?.cast) || [];
+  if (cast.length) {
+    const s = detailSection(`Distribution (${cast.length})`);
+    const row = el("div", "people-row");
+    cast.slice(0, 30).forEach((c) => {
+      const person = el("div", "person");
+      const ip = IMG(c.profile_path, "w185");
+      const im = el("img"); if (ip) im.src = ip; else im.className = "ph";
+      person.appendChild(im);
+      person.appendChild(el("div", "nm", c.name));
+      const ch = c.character || (c.roles && c.roles[0] && c.roles[0].character);
+      if (ch) person.appendChild(el("div", "ch", ch));
+      row.appendChild(person);
+    });
+    s.appendChild(row);
+    inner.appendChild(s);
+  }
+
+  // Crew (key jobs)
+  const crew = (tv ? (d.aggregate_credits?.crew || d.credits?.crew) : d.credits?.crew) || [];
+  if (crew.length) {
+    const wanted = ["Director", "Creator", "Writer", "Screenplay", "Story",
+      "Producer", "Executive Producer", "Original Music Composer", "Director of Photography"];
+    const byJob = {};
+    crew.forEach((c) => {
+      const job = c.job || (c.jobs && c.jobs[0] && c.jobs[0].job);
+      if (wanted.includes(job)) (byJob[job] = byJob[job] || []).push(c.name);
+    });
+    const grid = el("div", "facts");
+    wanted.forEach((job) => {
+      if (byJob[job]) {
+        const f = fact(job, [...new Set(byJob[job])]);
+        if (f) grid.appendChild(f);
+      }
+    });
+    if (grid.children.length) {
+      const s = detailSection("Équipe technique");
+      s.appendChild(grid);
+      inner.appendChild(s);
+    }
+  }
+
+  // Videos
+  const vids = (d.videos?.results || []).filter((v) => v.site === "YouTube");
+  if (vids.length) {
+    vids.sort((a, b) => (a.type === "Trailer" ? -1 : 0) - (b.type === "Trailer" ? -1 : 0));
+    const s = detailSection("Vidéos & bandes-annonces");
+    const list = el("div", "video-list");
+    vids.slice(0, 12).forEach((v) => {
+      const a = el("a", null, `▶ ${v.type} — ${v.name}`);
+      a.href = `https://www.youtube.com/watch?v=${v.key}`;
+      a.target = "_blank"; a.rel = "noopener";
+      list.appendChild(a);
+    });
+    s.appendChild(list);
+    inner.appendChild(s);
+  }
+
+  // Watch providers
+  const prov = (d["watch/providers"]?.results || {})[region];
+  if (prov) {
+    const s = detailSection(`Où regarder (${region})`);
+    const groups = [["flatrate", "Abonnement"], ["free", "Gratuit"], ["ads", "Avec pub"],
+      ["rent", "Location"], ["buy", "Achat"]];
+    groups.forEach(([key, label]) => {
+      if ((prov[key] || []).length) {
+        const g = el("div", "providers-group");
+        g.appendChild(el("div", "lbl", label));
+        const logos = el("div", "provider-logos");
+        prov[key].forEach((p) => {
+          const im = el("img"); im.title = p.provider_name;
+          const lp = IMG(p.logo_path, "w92"); if (lp) im.src = lp;
+          logos.appendChild(im);
+        });
+        g.appendChild(logos);
+        s.appendChild(g);
+      }
+    });
+    if (prov.link) {
+      const a = el("a", null, "Voir sur JustWatch →");
+      a.href = prov.link; a.target = "_blank"; a.rel = "noopener";
+      const ll = el("div", "link-list"); ll.appendChild(a); s.appendChild(ll);
+    }
+    inner.appendChild(s);
+  }
+
+  // Keywords
+  const kws = (tv ? d.keywords?.results : d.keywords?.keywords) || [];
+  if (kws.length) {
+    const s = detailSection("Mots-clés");
+    const box = el("div", "genre-chips");
+    kws.forEach((k) => box.appendChild(el("span", "chip", k.name)));
+    s.appendChild(box);
+    inner.appendChild(s);
+  }
+
+  // Production companies
+  if ((d.production_companies || []).length) {
+    const s = detailSection("Sociétés de production");
+    s.appendChild(el("p", "overview-text",
+      d.production_companies.map((c) => c.name + (c.origin_country ? ` (${c.origin_country})` : "")).join(" · ")));
+    inner.appendChild(s);
+  }
+
+  // External links
+  const links = externalLinks(d, tv);
+  if (links.length) {
+    const s = detailSection("Liens externes");
+    const list = el("div", "link-list");
+    links.forEach(([label, href]) => {
+      const a = el("a", null, label); a.href = href; a.target = "_blank"; a.rel = "noopener";
+      list.appendChild(a);
+    });
+    s.appendChild(list);
+    inner.appendChild(s);
+  }
+
+  // Reviews
+  const reviews = d.reviews?.results || [];
+  if (reviews.length) {
+    const s = detailSection(`Avis (${reviews.length})`);
+    reviews.slice(0, 5).forEach((r) => {
+      const rv = el("div", "review");
+      const rating = r.author_details && r.author_details.rating ? ` — ★ ${r.author_details.rating}/10` : "";
+      rv.appendChild(el("div", "author", r.author + rating));
+      const txt = r.content.length > 800 ? r.content.slice(0, 800) + "…" : r.content;
+      rv.appendChild(el("div", "text", txt));
+      s.appendChild(rv);
+    });
+    inner.appendChild(s);
+  }
+
+  // Recommendations & similar
+  addMiniRow(inner, "Recommandations", d.recommendations?.results, tv);
+  addMiniRow(inner, "Titres similaires", d.similar?.results, tv);
+
+  // Images
+  if (d.images) {
+    const b = (d.images.backdrops || []).length, p = (d.images.posters || []).length, l = (d.images.logos || []).length;
+    if (b || p || l) {
+      const s = detailSection("Galerie d'images");
+      s.appendChild(el("p", "overview-text", `${b} arrière-plan(s), ${p} affiche(s), ${l} logo(s).`));
+      const row = el("div", "poster-row");
+      (d.images.backdrops || []).slice(0, 10).forEach((img) => {
+        const ip = IMG(img.file_path, "w300");
+        if (ip) { const im = el("img"); im.src = ip; im.style.height = "120px";
+          im.style.borderRadius = "8px"; row.appendChild(im); }
+      });
+      if (row.children.length) s.appendChild(row);
+      inner.appendChild(s);
+    }
+  }
+
+  // Alternative titles (movie)
+  if (!tv && (d.alternative_titles?.titles || []).length) {
+    const s = detailSection("Titres alternatifs");
+    s.appendChild(el("p", "overview-text",
+      d.alternative_titles.titles.slice(0, 30).map((t) => `${t.title} (${t.iso_3166_1})`).join(" · ")));
+    inner.appendChild(s);
+  }
+
+  wrap.appendChild(inner);
+  const body = $("#detail-body");
+  body.innerHTML = "";
+  body.appendChild(wrap);
+}
+
+function certification(d, tv, region) {
+  try {
+    if (tv) {
+      const r = (d.content_ratings?.results || []).find((x) => x.iso_3166_1 === region)
+        || (d.content_ratings?.results || []).find((x) => x.iso_3166_1 === "US");
+      return r && r.rating ? r.rating : null;
+    }
+    const list = (d.release_dates?.results || []).find((x) => x.iso_3166_1 === region)
+      || (d.release_dates?.results || []).find((x) => x.iso_3166_1 === "US");
+    const rd = list && (list.release_dates || []).find((x) => x.certification);
+    return rd ? rd.certification : null;
+  } catch (e) { return null; }
+}
+
+function externalLinks(d, tv) {
+  const out = [];
+  out.push(["TMDB", `https://www.themoviedb.org/${tv ? "tv" : "movie"}/${d.id}`]);
+  const ext = d.external_ids || {};
+  const imdb = d.imdb_id || ext.imdb_id;
+  if (imdb) out.push(["IMDb", `https://www.imdb.com/title/${imdb}`]);
+  if (ext.tvdb_id) out.push(["TheTVDB", `https://thetvdb.com/?id=${ext.tvdb_id}&tab=series`]);
+  if (d.homepage) out.push(["Site officiel", d.homepage]);
+  if (ext.facebook_id) out.push(["Facebook", `https://facebook.com/${ext.facebook_id}`]);
+  if (ext.instagram_id) out.push(["Instagram", `https://instagram.com/${ext.instagram_id}`]);
+  if (ext.twitter_id) out.push(["Twitter / X", `https://twitter.com/${ext.twitter_id}`]);
+  return out;
+}
+
+function addMiniRow(inner, title, items, tv) {
+  items = items || [];
+  if (!items.length) return;
+  const s = detailSection(title);
+  const row = el("div", "poster-row");
+  items.slice(0, 20).forEach((it) => {
+    const mini = el("div", "mini");
+    const ip = IMG(it.poster_path, "w185");
+    const im = el("img"); if (ip) im.src = ip; else im.className = "ph";
+    mini.appendChild(im);
+    mini.appendChild(el("div", "nm", it.title || it.name));
+    mini.onclick = () => openDetails(it, tv ? "tv" : "movie");
+    row.appendChild(mini);
+  });
+  s.appendChild(row);
+  inner.appendChild(s);
+}
+
 // ----------------------- helpers / UI binding -----------------------
 function fmtBytes(b) {
   if (!b) return "0 o";
@@ -633,6 +994,17 @@ function bindUI() {
   $("#modal-add").onclick = confirmAdd;
   $("#modal-cancel").onclick = () => $("#modal").classList.add("hidden");
   $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").classList.add("hidden"); });
+
+  $("#detail-close").onclick = () => $("#detail-modal").classList.add("hidden");
+  $("#detail-modal").addEventListener("click", (e) => {
+    if (e.target.id === "detail-modal") $("#detail-modal").classList.add("hidden");
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $("#detail-modal").classList.add("hidden");
+      $("#modal").classList.add("hidden");
+    }
+  });
 
   setupAutocomplete("#f-person-search", "#f-person-results", "#f-person-selected", "/tmdb/search/person", state.people, "name");
   setupAutocomplete("#f-keyword-search", "#f-keyword-results", "#f-keyword-selected", "/tmdb/search/keyword", state.keywords, "name");

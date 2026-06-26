@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=8" />
+  <link rel="stylesheet" href="/style.css?v=9" />
 </head>
 <body>
   <header>
@@ -204,6 +204,14 @@
     </div>
   </div>
 
-  <script src="/app.js?v=8"></script>
+  <!-- Details modal -->
+  <div id="detail-modal" class="modal hidden">
+    <div class="detail-content">
+      <button id="detail-close" class="detail-close" aria-label="Fermer">✕</button>
+      <div id="detail-body"></div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=9"></script>
 </body>
 </html>

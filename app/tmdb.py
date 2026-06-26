@@ -72,7 +72,13 @@ class TMDBClient:
     async def tv(self, tmdb_id: int) -> dict[str, Any]:
         return await self._get(
             f"/tv/{tmdb_id}",
-            {"append_to_response": "external_ids,credits,videos,watch/providers"},
+            {
+                "append_to_response": (
+                    "external_ids,credits,aggregate_credits,videos,watch/providers,"
+                    "images,keywords,recommendations,similar,reviews,content_ratings"
+                ),
+                "include_image_language": f"{self.language.split('-')[0]},en,null",
+            },
         )
 
     async def tv_external_ids(self, tmdb_id: int) -> dict[str, Any]:
@@ -106,7 +112,13 @@ class TMDBClient:
     async def movie(self, tmdb_id: int) -> dict[str, Any]:
         return await self._get(
             f"/movie/{tmdb_id}",
-            {"append_to_response": "credits,videos,release_dates,watch/providers"},
+            {
+                "append_to_response": (
+                    "credits,videos,release_dates,watch/providers,images,keywords,"
+                    "recommendations,similar,reviews,external_ids,alternative_titles"
+                ),
+                "include_image_language": f"{self.language.split('-')[0]},en,null",
+            },
         )
 
     async def collection(self, collection_id: int) -> dict[str, Any]:
