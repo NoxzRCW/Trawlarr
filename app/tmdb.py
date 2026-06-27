@@ -6,6 +6,7 @@ that the frontend needs to build rich filter UIs.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -30,11 +31,26 @@ class TMDBClient:
         params = {k: v for k, v in (params or {}).items() if v is not None and v != ""}
         params.setdefault("api_key", self.api_key)
         params.setdefault("language", self.language)
+        url = f"{TMDB_BASE}{path}"
+        # TMDB occasionally returns transient 5xx ("Internal error", status 11),
+        # especially on /discover. Retry a few times with a short backoff.
+        attempts = 4
         async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(f"{TMDB_BASE}{path}", params=params)
-        if resp.status_code >= 400:
-            raise TMDBError(f"TMDB {resp.status_code}: {resp.text}")
-        return resp.json()
+            for attempt in range(attempts):
+                try:
+                    resp = await client.get(url, params=params)
+                except httpx.RequestError as e:
+                    if attempt + 1 >= attempts:
+                        raise TMDBError(f"TMDB request failed: {e}")
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+                if resp.status_code >= 500 and attempt + 1 < attempts:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+                if resp.status_code >= 400:
+                    raise TMDBError(f"TMDB {resp.status_code}: {resp.text}")
+                return resp.json()
+        raise TMDBError("TMDB request failed after retries")
 
     # ---- Discover: the core advanced search ----
     async def discover_movie(self, filters: dict[str, Any]) -> dict[str, Any]:

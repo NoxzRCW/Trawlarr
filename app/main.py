@@ -345,7 +345,21 @@ async def _paginate_filtered(
     pages_fetched = 0
 
     while True:
-        data = await fetch_page(tmdb_page)
+        try:
+            data = await fetch_page(tmdb_page)
+        except TMDBError:
+            # A single upstream page failed (after retries). If we already have
+            # results, return them gracefully and let the cursor resume here next
+            # time; only surface the error when we couldn't fetch anything at all.
+            if collected:
+                return {
+                    "results": collected,
+                    "next_cursor": position,
+                    "has_more": True,
+                    "total_results": total_results,
+                    "total_pages": total_pages,
+                }
+            raise
         total_pages = min(data.get("total_pages", 1) or 1, 500)
         total_results = data.get("total_results", 0)
         page_results = data.get("results", [])
