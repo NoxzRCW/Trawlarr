@@ -79,11 +79,15 @@ class TMDBClient:
 
     async def search_tv(self, query: str, page: int = 1, year: int | None = None,
                         include_adult: bool = False) -> dict[str, Any]:
-        return await self._get(
-            "/search/tv",
-            {"query": query, "page": page, "first_air_date_year": year,
-             "include_adult": str(include_adult).lower()},
-        )
+        # /search/tv is touchy: passing some optional params (notably
+        # include_adult, or first_air_date_year) can trigger TMDB "Internal
+        # error" (status 11). Only send optional params when they carry a value.
+        params: dict[str, Any] = {"query": query, "page": page}
+        if year:
+            params["first_air_date_year"] = year
+        if include_adult:
+            params["include_adult"] = "true"
+        return await self._get("/search/tv", params)
 
     async def tv(self, tmdb_id: int) -> dict[str, Any]:
         return await self._get(
