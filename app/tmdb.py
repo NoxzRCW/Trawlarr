@@ -87,7 +87,14 @@ class TMDBClient:
             params["first_air_date_year"] = year
         if include_adult:
             params["include_adult"] = "true"
-        return await self._get("/search/tv", params)
+        try:
+            return await self._get("/search/tv", params)
+        except TMDBError:
+            # Fallback: /search/multi tends to stay up when /search/tv's gateway
+            # errors out. Keep only TV hits and normalise the payload shape.
+            data = await self._get("/search/multi", {"query": query, "page": page})
+            data["results"] = [r for r in data.get("results", []) if r.get("media_type") == "tv"]
+            return data
 
     async def tv(self, tmdb_id: int) -> dict[str, Any]:
         return await self._get(
