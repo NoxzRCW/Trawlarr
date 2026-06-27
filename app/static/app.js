@@ -104,10 +104,13 @@ async function init() {
 async function loadHealth() {
   try {
     const h = await api("/health");
-    const tmdb = `TMDB <span class="pill ${h.tmdb ? "ok" : "ko"}">${h.tmdb ? "OK" : "KO"}</span>`;
-    const rad = `Radarr <span class="pill ${h.radarr ? "ok" : "ko"}">${h.radarr ? (h.radarr_version || "OK") : "KO"}</span>`;
-    const son = `Sonarr <span class="pill ${h.sonarr ? "ok" : "ko"}">${h.sonarr ? (h.sonarr_version || "OK") : "KO"}</span>`;
-    $("#health").innerHTML = tmdb + rad + son;
+    // Each service: status dot + name + (version on desktop only).
+    const svc = (name, ok, ver) =>
+      `<span class="svc" title="${ver || (ok ? "OK" : "indisponible")}">` +
+      `<span class="dot ${ok ? "ok" : "ko"}"></span>${name}` +
+      `${ver ? `<span class="ver">${ver}</span>` : ""}</span>`;
+    $("#health").innerHTML =
+      svc("TMDB", h.tmdb) + svc("Radarr", h.radarr, h.radarr_version) + svc("Sonarr", h.sonarr, h.sonarr_version);
   } catch (e) { $("#health").textContent = "Connexion impossible"; }
 }
 
