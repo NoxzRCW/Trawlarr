@@ -58,6 +58,16 @@ class SonarrClient:
         series = await self.all_series()
         return {s["tvdbId"] for s in series if s.get("tvdbId")}
 
+    async def existing_ids(self) -> tuple[set[int], set[int]]:
+        """Return (tmdb_ids, tvdb_ids) present in the library. Sonarr v4 stores a
+        `tmdbId` on each series, which lets us match TMDB results directly and
+        reliably; the TVDB set is the fallback for older Sonarr versions or
+        series whose TMDB->TVDB mapping is missing on TMDB's side."""
+        series = await self.all_series()
+        tmdb_ids = {s["tmdbId"] for s in series if s.get("tmdbId")}
+        tvdb_ids = {s["tvdbId"] for s in series if s.get("tvdbId")}
+        return tmdb_ids, tvdb_ids
+
     async def lookup_by_tvdb(self, tvdb_id: int) -> dict[str, Any]:
         result = await self._request("GET", "/series/lookup", params={"term": f"tvdb:{tvdb_id}"})
         if isinstance(result, list):

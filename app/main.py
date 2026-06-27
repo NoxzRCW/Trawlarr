@@ -128,7 +128,8 @@ async def _resolve_tvdb(tmdb_id: int) -> int | None:
             ext = await tmdb.tv_external_ids(tmdb_id)
             tvdb_id = ext.get("tvdb_id") or None
         except TMDBError:
-            tvdb_id = None
+            # Don't cache transient failures, so a later request can retry.
+            return None
     _tvdb_cache[tmdb_id] = tvdb_id
     return tvdb_id
 
@@ -280,17 +281,31 @@ async def _movie_owner() -> tuple[Any, str]:
 
 
 async def _tv_owner() -> tuple[Any, str]:
-    """Build an async callback that flags series present in the Sonarr library."""
+    """Build an async callback that flags series present in the Sonarr library.
+
+    Matches by TMDB id first (reliable, populated by Sonarr v4) and only falls
+    back to resolving TMDB -> TVDB for series Sonarr couldn't match that way
+    (older Sonarr, or shows whose TMDB/TVDB mapping is missing on TMDB)."""
     try:
-        existing = await sonarr.existing_tvdb_ids()
+        existing_tmdb, existing_tvdb = await sonarr.existing_ids()
     except SonarrError:
-        existing = set()
+        existing_tmdb, existing_tvdb = set(), set()
 
     async def mark(results: list[dict[str, Any]]) -> None:
-        await _annotate_tvdb(results)
+        unresolved: list[dict[str, Any]] = []
         for m in results:
-            tvdb_id = m.get("tvdb_id")
-            m["in_sonarr"] = bool(tvdb_id and tvdb_id in existing)
+            if m.get("id") in existing_tmdb:
+                m["in_sonarr"] = True
+            else:
+                m["in_sonarr"] = False
+                unresolved.append(m)
+        # Fallback: resolve TVDB ids only for series not matched by TMDB id.
+        if existing_tvdb and unresolved:
+            await _annotate_tvdb(unresolved)
+            for m in unresolved:
+                tvdb_id = m.get("tvdb_id")
+                if tvdb_id and tvdb_id in existing_tvdb:
+                    m["in_sonarr"] = True
 
     return mark, "in_sonarr"
 
