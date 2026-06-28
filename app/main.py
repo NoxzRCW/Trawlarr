@@ -742,17 +742,33 @@ async def summarize(payload: dict[str, Any]) -> Any:
         "pays": [c.get("name") for c in d.get("production_countries", [])],
         "créateurs": [c.get("name") for c in d.get("created_by", [])] if media == "tv" else None,
     }
+    import random
+    # A randomly-chosen angle each call keeps every summary distinct.
+    angles = [
+        "commence par planter l'ambiance ou le décor",
+        "commence par évoquer le thème central ou la question que pose l'œuvre",
+        "commence en mentionnant un acteur principal et son rôle",
+        "commence par le genre et le ton (ce que l'on ressent en regardant)",
+        "commence par le public ou l'envie à laquelle ça répond",
+        "commence par une mise en contexte (époque, lieu, univers)",
+    ]
+    angle = random.choice(angles)
     system = (
-        "Tu es un présentateur ciné/séries chaleureux. À partir des données "
-        "fournies (JSON), rédige en français un résumé ORAL d'environ 120 à 180 "
-        "mots, à lire à voix haute. Présente le média, son genre et son ambiance, "
-        "cite les acteurs principaux et les thèmes abordés, et indique à quel "
-        "public il plaira. STRICTEMENT SANS SPOILER : ne révèle aucun "
-        "rebondissement ni la fin. Style fluide et naturel, sans listes ni "
-        "titres, juste un paragraphe parlé. Réponds uniquement avec le texte."
+        "Tu es un présentateur ciné/séries chaleureux et naturel. À partir des "
+        "données fournies (JSON), rédige en français un résumé ORAL d'environ 110 "
+        "à 170 mots, à lire à voix haute. Présente le média, son ambiance, cite "
+        "les acteurs principaux et les thèmes abordés, et indique à qui il "
+        "plaira. STRICTEMENT SANS SPOILER : ne révèle aucun rebondissement ni la "
+        "fin. Style fluide, un seul paragraphe parlé, sans listes ni titres.\n"
+        "IMPORTANT — sois unique à CHAQUE fois : ne commence JAMAIS par « Alors », "
+        "« Plongez », « Imaginez », « Préparez-vous », « Bienvenue » ni aucune "
+        "formule toute faite. Varie l'ouverture et la structure. Pour ce résumé, "
+        f"{angle}. Appuie-toi sur les détails concrets de CETTE œuvre (titre, "
+        "année, acteurs, genres) pour que le texte lui soit propre. Réponds "
+        "uniquement avec le texte du résumé."
     )
     import json as _json
-    text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False))
+    text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
     return {"title": title, "year": year, "summary": text}
 
 

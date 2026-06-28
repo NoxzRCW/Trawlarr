@@ -36,6 +36,7 @@ class MistralClient:
                 {"role": "user", "content": user},
             ],
             "temperature": temperature,
+            "top_p": 0.95,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
         async with httpx.AsyncClient(timeout=45.0) as client:
