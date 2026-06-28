@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     sonarr_season_folder: bool = True
     sonarr_series_type: str = "standard"  # standard | anime | daily
 
+    # Mistral AI (voice / natural-language assistant)
+    mistral_api_key: str = ""
+    mistral_model: str = "mistral-large-latest"
+
     app_title: str = "Media Search"
 
     @field_validator(

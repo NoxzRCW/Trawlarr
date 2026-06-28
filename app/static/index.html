@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=11" />
+  <link rel="stylesheet" href="/style.css?v=12" />
 </head>
 <body>
   <header>
@@ -175,6 +175,7 @@
           <button id="add-selection" class="primary" disabled>+ Ajouter la sélection</button>
         </div>
       </div>
+      <div id="assistant-banner" class="assistant-banner hidden"></div>
       <div id="status" class="status"></div>
       <div id="results" class="grid"></div>
       <div id="pagination" class="pagination"></div>
@@ -212,6 +213,23 @@
     </div>
   </div>
 
-  <script src="/app.js?v=11"></script>
+  <!-- Voice assistant (Mistral AI) -->
+  <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">🎙️</button>
+  <div id="assistant-overlay" class="modal hidden">
+    <div class="assistant-card">
+      <button id="assistant-close" class="detail-close" aria-label="Fermer">✕</button>
+      <div id="assistant-orb" class="assistant-orb">🎙️</div>
+      <div id="assistant-status" class="assistant-status">Appuyez sur le micro et parlez…</div>
+      <div id="assistant-transcript" class="assistant-transcript"></div>
+      <div class="assistant-controls">
+        <button id="assistant-talk" class="primary">🎤 Parler</button>
+      </div>
+      <input id="assistant-text" type="text" placeholder="…ou tapez votre demande puis Entrée" />
+      <div id="assistant-reply" class="assistant-reply"></div>
+      <div class="assistant-hint">Ex : « des films d'horreur des années 80 », « des séries comme Breaking Bad », « je ne sais pas quoi regarder ce soir »</div>
+    </div>
+  </div>
+
+  <script src="/app.js?v=12"></script>
 </body>
 </html>

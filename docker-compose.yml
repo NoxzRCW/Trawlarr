@@ -29,3 +29,6 @@ services:
       SONARR_SEARCH_ON_ADD: ${SONARR_SEARCH_ON_ADD:-true}
       SONARR_SERIES_TYPE: ${SONARR_SERIES_TYPE:-standard}
       SONARR_SEASON_FOLDER: ${SONARR_SEASON_FOLDER:-true}
+      # --- Mistral AI (voice assistant, optional) ---
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}

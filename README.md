@@ -34,6 +34,13 @@ fait automatiquement le pont TMDB → TVDB (via les `external_ids` de TMDB, avec
   minimale, monitoring, recherche immédiate, et option **ajouter toute la collection**.
 - **Ajout à Sonarr** en un clic : profil de qualité, dossier racine, monitoring,
   recherche immédiate (toutes les saisons surveillées).
+- **Détails complets** d'un film/série (tout TMDB) dans une modale dédiée.
+- **Assistant vocal (Mistral AI)** : un bouton micro flottant ; demandez en
+  français (« des films d'horreur des années 80 », « des séries comme Breaking
+  Bad », « je ne sais pas quoi regarder ») et l'IA applique les filtres et lance
+  la recherche, ou propose des recommandations. Reconnaissance vocale via le
+  navigateur (Web Speech API), réponse parlée optionnelle. Désactivé tant que
+  `MISTRAL_API_KEY` n'est pas défini.
 - Les clés API restent **côté serveur** : le navigateur ne les voit jamais.
 
 ## 🚀 Démarrage rapide

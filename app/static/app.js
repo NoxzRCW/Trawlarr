@@ -96,6 +96,9 @@ async function init() {
   document.title = state.config.title;
 
   applyMediaUI();
+  if (state.config.integrations && state.config.integrations.mistral) {
+    $("#assistant-fab").classList.remove("hidden");
+  }
   await Promise.all([loadHealth(), loadGenres(), loadProviders(), loadLibraryOptions()]);
   bindUI();
   search();
@@ -121,6 +124,7 @@ async function loadGenres() {
   box.innerHTML = "";
   genres.forEach((g) => {
     const chip = el("span", "chip", g.name);
+    chip.dataset.gid = g.id;
     chip.onclick = (ev) => {
       const cur = state.genres.get(g.id);
       if (ev.shiftKey) {
@@ -902,6 +906,194 @@ function addMiniRow(inner, title, items, tv) {
   inner.appendChild(s);
 }
 
+// ----------------------- voice assistant (Mistral) -----------------------
+let _recognition = null;
+
+function setOrb(cls) { $("#assistant-orb").className = "assistant-orb" + (cls ? " " + cls : ""); }
+function setAssistantStatus(t) { $("#assistant-status").textContent = t || ""; }
+function setReply(t, err) {
+  const r = $("#assistant-reply");
+  r.textContent = t || "";
+  r.classList.toggle("err", !!err);
+}
+
+function openAssistant() {
+  $("#assistant-overlay").classList.remove("hidden");
+  setAssistantStatus("Appuyez sur le micro et parlez…");
+  $("#assistant-transcript").textContent = "";
+  setReply("");
+  setOrb("");
+}
+function closeAssistant() {
+  $("#assistant-overlay").classList.add("hidden");
+  if (_recognition) { try { _recognition.stop(); } catch (e) {} }
+  setOrb("");
+  $("#assistant-fab").classList.remove("listening");
+}
+
+function speak(text) {
+  try {
+    if (!text || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "fr-FR";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch (e) { /* TTS optional */ }
+}
+
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    setAssistantStatus("Reconnaissance vocale non supportée par ce navigateur — tapez votre demande ci-dessous.");
+    return;
+  }
+  const r = new SR();
+  _recognition = r;
+  r.lang = "fr-FR";
+  r.interimResults = true;
+  r.continuous = false;
+  r.maxAlternatives = 1;
+  setOrb("listening");
+  $("#assistant-fab").classList.add("listening");
+  setAssistantStatus("Je vous écoute…");
+  $("#assistant-transcript").textContent = "";
+  r.onresult = (e) => {
+    let t = "";
+    for (const res of e.results) t += res[0].transcript;
+    $("#assistant-transcript").textContent = t;
+  };
+  r.onerror = (e) => {
+    setOrb(""); $("#assistant-fab").classList.remove("listening");
+    setAssistantStatus(e.error === "not-allowed"
+      ? "Micro refusé — autorisez le micro dans le navigateur."
+      : "Erreur micro : " + e.error);
+  };
+  r.onend = () => {
+    setOrb(""); $("#assistant-fab").classList.remove("listening");
+    const t = $("#assistant-transcript").textContent.trim();
+    if (t) askAssistant(t);
+    else setAssistantStatus("Je n'ai rien entendu. Réessayez.");
+  };
+  try { r.start(); } catch (e) { /* already started */ }
+}
+
+async function askAssistant(text) {
+  setOrb("thinking");
+  setAssistantStatus("Je réfléchis…");
+  setReply("");
+  try {
+    const plan = await api("/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    setOrb("");
+    setReply(plan.explanation || "C'est parti !");
+    await applyPlan(plan);
+    setAssistantStatus("Terminé ✓");
+    speak(plan.spoken || plan.explanation);
+    setTimeout(closeAssistant, 1100);
+  } catch (e) {
+    setOrb("");
+    setAssistantStatus("");
+    setReply("Échec : " + e.message, true);
+  }
+}
+
+// Switch media without triggering an extra default search (avoids a race with
+// the assistant's own rendering).
+async function ensureMedia(media) {
+  if (media === state.media) return;
+  state.media = media;
+  document.querySelectorAll(".media-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.media === media));
+  resetFilters();
+  applyMediaUI();
+  await Promise.all([loadGenres(), loadProviders(), loadLibraryOptions()]);
+}
+
+async function applyPlan(plan) {
+  await ensureMedia(plan.media === "tv" ? "tv" : "movie");
+  if (plan.mode === "titles") renderAssistantTitles(plan);
+  else applyAssistantDiscover(plan);
+}
+
+function setMode(m) {
+  state.mode = m;
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.mode === m));
+  $("#panel-discover").classList.toggle("hidden", m !== "discover");
+  $("#panel-search").classList.toggle("hidden", m !== "search");
+}
+
+function refreshGenreChips() {
+  document.querySelectorAll("#f-genres .chip").forEach((c) => {
+    const mode = state.genres.get(Number(c.dataset.gid));
+    c.className = "chip" + (mode ? " " + mode : "");
+  });
+}
+
+function ensureSelectValue(sel, value, label) {
+  if (value == null || value === "") return;
+  const s = $(sel);
+  if (![...s.options].some((o) => o.value === String(value))) {
+    const o = document.createElement("option");
+    o.value = String(value); o.textContent = label || String(value);
+    s.appendChild(o);
+  }
+  s.value = String(value);
+}
+
+function applyAssistantDiscover(plan) {
+  const f = plan.filters || {};
+  // A specific title -> use the text-search tab instead.
+  if (f.query) {
+    setMode("search");
+    $("#q-text").value = f.query;
+    newSearch();
+    showAssistantBanner(plan.explanation);
+    return;
+  }
+  setMode("discover");
+  resetFilters();
+  (f.with_genres || []).forEach((id) => state.genres.set(Number(id), "include"));
+  (f.without_genres || []).forEach((id) => state.genres.set(Number(id), "exclude"));
+  refreshGenreChips();
+  ensureSelectValue("#f-sort", f.sort_by, f.sort_by);
+  if (f.vote_average_gte != null) $("#f-vote-gte").value = f.vote_average_gte;
+  if (f.vote_count_gte != null) $("#f-votecount-gte").value = f.vote_count_gte;
+  if (f.runtime_gte != null) $("#f-runtime-gte").value = f.runtime_gte;
+  if (f.runtime_lte != null) $("#f-runtime-lte").value = f.runtime_lte;
+  if (f.with_original_language) ensureSelectValue("#f-language", f.with_original_language, f.with_original_language.toUpperCase());
+  if (f.with_origin_country) $("#f-origin-country").value = f.with_origin_country;
+  if (f.year_min) $("#f-date-gte").value = `${f.year_min}-01-01`;
+  if (f.year_max) $("#f-date-lte").value = `${f.year_max}-12-31`;
+  newSearch();
+  showAssistantBanner(plan.explanation);
+}
+
+function renderAssistantTitles(plan) {
+  setMode("discover");
+  state.selected.clear();
+  state.hasMore = false;
+  state.cursorStack = [];
+  const results = plan.results || [];
+  renderResults(results);
+  $("#pagination").innerHTML = "";
+  const noun = isTv() ? "série(s)" : "film(s)";
+  $("#status").textContent = `${results.length} ${noun} suggéré(s)`;
+  showAssistantBanner(plan.explanation || "Suggestions de l'IA");
+}
+
+function showAssistantBanner(text) {
+  const b = $("#assistant-banner");
+  b.innerHTML = "";
+  b.appendChild(el("span", null, "✨ " + (text || "Résultats proposés par l'IA")));
+  const x = el("button", null, "✕ Effacer");
+  x.onclick = () => b.classList.add("hidden");
+  b.appendChild(x);
+  b.classList.remove("hidden");
+}
+
 // ----------------------- helpers / UI binding -----------------------
 function fmtBytes(b) {
   if (!b) return "0 o";
@@ -1006,6 +1198,21 @@ function bindUI() {
     if (e.key === "Escape") {
       $("#detail-modal").classList.add("hidden");
       $("#modal").classList.add("hidden");
+      closeAssistant();
+    }
+  });
+
+  // Voice assistant
+  $("#assistant-fab").onclick = openAssistant;
+  $("#assistant-close").onclick = closeAssistant;
+  $("#assistant-overlay").addEventListener("click", (e) => {
+    if (e.target.id === "assistant-overlay") closeAssistant();
+  });
+  $("#assistant-talk").onclick = startListening;
+  $("#assistant-text").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const v = e.target.value.trim();
+      if (v) { askAssistant(v); e.target.value = ""; }
     }
   });
 

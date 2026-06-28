@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .mistral import MistralError, mistral
 from .radarr import RadarrError, radarr
 from .sonarr import SonarrError, sonarr
 from .tmdb import IMAGE_BASE, TMDBError, tmdb
@@ -111,6 +112,11 @@ async def sonarr_error_handler(_: Request, exc: SonarrError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
+@app.exception_handler(MistralError)
+async def mistral_error_handler(_: Request, exc: MistralError) -> JSONResponse:
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
 # TMDB TV ids must be mapped to TVDB ids for Sonarr. Cache the mapping so we
 # don't re-query TMDB external_ids for the same show across pages.
 _tvdb_cache: dict[int, int | None] = {}
@@ -154,6 +160,7 @@ async def get_config() -> dict[str, Any]:
         "integrations": {
             "radarr": bool(settings.radarr_api_key),
             "sonarr": bool(settings.sonarr_api_key),
+            "mistral": bool(settings.mistral_api_key),
         },
         "defaults": {
             "quality_profile_id": settings.radarr_quality_profile_id,
@@ -598,6 +605,95 @@ async def add_to_sonarr(payload: dict[str, Any]) -> Any:
         season_folder=settings.sonarr_season_folder,
         series_type=payload.get("series_type", settings.sonarr_series_type),
     )
+
+
+# ----------------------- Assistant (Mistral AI) -----------------------
+def _build_assistant_prompt(movie_genres: list[dict], tv_genres: list[dict]) -> str:
+    mg = ", ".join(f'{g["name"]}={g["id"]}' for g in movie_genres)
+    tg = ", ".join(f'{g["name"]}={g["id"]}' for g in tv_genres)
+    return (
+        "Tu es l'assistant d'un site de recherche de films (Radarr) et de séries "
+        "(Sonarr) basé sur l'API TMDB. L'utilisateur te parle en français. À partir "
+        "de sa demande, tu produis UNIQUEMENT un objet JSON (aucun texte autour) "
+        "décrivant l'action à effectuer.\n\n"
+        "Schéma JSON attendu :\n"
+        "{\n"
+        '  "media": "movie" | "tv",   // séries -> "tv", sinon "movie"\n'
+        '  "mode": "discover" | "titles",\n'
+        '  "filters": {               // si mode = "discover" (tous optionnels)\n'
+        '     "with_genres": [int], "without_genres": [int],\n'
+        '     "sort_by": "popularity.desc|vote_average.desc|primary_release_date.desc|first_air_date.desc|revenue.desc|vote_count.desc",\n'
+        '     "vote_average_gte": number, "vote_count_gte": int,\n'
+        '     "year_min": int, "year_max": int,\n'
+        '     "with_original_language": "code ISO 639-1 (ex: ja, en, fr)",\n'
+        '     "with_origin_country": "codes ISO 3166-1 séparés par | (ex: US|GB)",\n'
+        '     "runtime_gte": int, "runtime_lte": int,\n'
+        '     "query": "fragment de titre si l\'utilisateur cherche un titre précis"\n'
+        "  },\n"
+        '  "titles": ["Titre 1", "Titre 2", ...],  // si mode = "titles"\n'
+        '  "explanation": "courte phrase en français décrivant ce que tu as compris",\n'
+        '  "spoken": "réponse orale courte et naturelle en français"\n'
+        "}\n\n"
+        "Règles :\n"
+        "- Utilise mode=\"discover\" pour des recherches par thème, genre, époque, "
+        "note, langue, pays, durée, popularité, etc.\n"
+        "- Utilise mode=\"titles\" pour des recommandations par l'exemple (\"comme "
+        "Inception\"), ou quand l'utilisateur ne sait pas quoi regarder : propose "
+        "alors 8 à 12 titres pertinents et réels.\n"
+        "- N'emploie que des identifiants de genres issus de ces listes.\n"
+        f"- Genres FILMS : {mg}\n"
+        f"- Genres SÉRIES : {tg}\n"
+        "- Si la demande est vague, fais des choix raisonnables. Réponds toujours "
+        "en français pour explanation et spoken."
+    )
+
+
+async def _resolve_titles(titles: list[str], media: str) -> list[dict[str, Any]]:
+    """Resolve suggested titles to actual TMDB results (first hit each), then
+    annotate library ownership."""
+    mark, _ = await (_tv_owner() if media == "tv" else _movie_owner())
+
+    async def one(title: str) -> dict[str, Any] | None:
+        try:
+            data = await (tmdb.search_tv(title) if media == "tv" else tmdb.search_movie(title))
+        except TMDBError:
+            return None
+        res = data.get("results") or []
+        return res[0] if res else None
+
+    found = await asyncio.gather(*(one(t) for t in titles[:12]))
+    picks: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for m in found:
+        if m and m.get("id") and m["id"] not in seen:
+            seen.add(m["id"])
+            picks.append(m)
+    await mark(picks)
+    return picks
+
+
+@app.post("/api/assistant")
+async def assistant(payload: dict[str, Any]) -> Any:
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Demande vide.")
+
+    try:
+        movie_genres = (await tmdb.genres()).get("genres", [])
+    except TMDBError:
+        movie_genres = []
+    try:
+        tv_genres = (await tmdb.tv_genres()).get("genres", [])
+    except TMDBError:
+        tv_genres = []
+
+    plan = await mistral.chat_json(_build_assistant_prompt(movie_genres, tv_genres), text)
+    plan["media"] = "tv" if plan.get("media") == "tv" else "movie"
+
+    if plan.get("mode") == "titles":
+        plan["results"] = await _resolve_titles(plan.get("titles") or [], plan["media"])
+
+    return plan
 
 
 # ----------------------- Static frontend (mounted last) -----------------------
