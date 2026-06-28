@@ -11,10 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import tts as tts_engine
 from .config import settings
 from .mistral import MistralError, mistral
 from .radarr import RadarrError, radarr
@@ -177,6 +178,7 @@ async def get_config() -> dict[str, Any]:
             "radarr": bool(settings.radarr_api_key),
             "sonarr": bool(settings.sonarr_api_key),
             "mistral": bool(settings.mistral_api_key),
+            "tts": tts_engine.piper_available(),
         },
         "defaults": {
             "quality_profile_id": settings.radarr_quality_profile_id,
@@ -770,6 +772,21 @@ async def summarize(payload: dict[str, Any]) -> Any:
     import json as _json
     text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
     return {"title": title, "year": year, "summary": text}
+
+
+@app.post("/api/tts")
+async def text_to_speech(payload: dict[str, Any]) -> Any:
+    """Render text to natural French speech (WAV) via the self-hosted Piper engine."""
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texte requis")
+    if not tts_engine.piper_available():
+        raise HTTPException(status_code=503, detail="Synthèse vocale serveur indisponible")
+    try:
+        audio = await tts_engine.synthesize(text)
+    except tts_engine.TTSError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(content=audio, media_type="audio/wav")
 
 
 # ----------------------- Auto-lists -----------------------

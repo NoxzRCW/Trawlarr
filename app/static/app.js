@@ -105,8 +105,12 @@ async function init() {
   if (state.config.integrations && state.config.integrations.mistral) {
     $("#assistant-fab").classList.remove("hidden");
   }
-  // Voices load asynchronously in most browsers.
-  if (window.speechSynthesis) {
+  // Server-side Piper voice is used when available; the browser-voice picker is
+  // only relevant for the fallback, so hide it when Piper is on.
+  if (ttsAvailable()) {
+    const row = document.querySelector(".summary-voice-row");
+    if (row) row.style.display = "none";
+  } else if (window.speechSynthesis) {
     populateVoiceSelect();
     window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
   }
@@ -983,7 +987,8 @@ function populateVoiceSelect() {
   if (cur) { sel.value = cur.voiceURI; state.ttsVoiceURI = cur.voiceURI; }
 }
 
-function speakText(text, orb) {
+// Browser (Web Speech) fallback voice.
+function browserSpeak(text, orb) {
   try {
     if (!text || !window.speechSynthesis) { if (orb) orb.className = "summary-orb"; return; }
     window.speechSynthesis.cancel();
@@ -1000,6 +1005,44 @@ function speakText(text, orb) {
     }
     window.speechSynthesis.speak(u);
   } catch (e) { if (orb) orb.className = "summary-orb"; }
+}
+
+function ttsAvailable() {
+  return !!(state.config && state.config.integrations && state.config.integrations.tts);
+}
+
+function stopSpeech() {
+  if (state.currentAudio) { try { state.currentAudio.pause(); } catch (e) {} state.currentAudio = null; }
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+}
+
+// Speak via the self-hosted Piper engine (natural French voice); fall back to
+// the browser voice if it's unavailable or fails.
+async function speakText(text, orb) {
+  stopSpeech();
+  if (!text) return;
+  if (ttsAvailable()) {
+    try {
+      if (orb) orb.className = "summary-orb thinking";
+      const resp = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!resp.ok) throw new Error("tts " + resp.status);
+      const url = URL.createObjectURL(await resp.blob());
+      const audio = new Audio(url);
+      state.currentAudio = audio;
+      audio.onplay = () => { if (orb) orb.className = "summary-orb speaking"; };
+      audio.onended = () => { if (orb) orb.className = "summary-orb"; URL.revokeObjectURL(url); state.currentAudio = null; };
+      audio.onerror = () => { if (orb) orb.className = "summary-orb"; browserSpeak(text, orb); };
+      await audio.play();
+      return;
+    } catch (e) {
+      // fall through to browser voice
+    }
+  }
+  browserSpeak(text, orb);
 }
 
 function speak(text) { speakText(text); }
@@ -1435,7 +1478,7 @@ async function deleteList(id) {
 // ----------------------- spoken summary -----------------------
 function closeSummary() {
   $("#summary-modal").classList.add("hidden");
-  try { window.speechSynthesis.cancel(); } catch (e) {}
+  stopSpeech();
   $("#summary-orb").className = "summary-orb";
 }
 
@@ -1605,7 +1648,7 @@ function bindUI() {
     try { localStorage.setItem("ttsVoice", e.target.value); } catch (err) {}
     if (state.lastSummary) speakSummary(state.lastSummary);
   };
-  $("#summary-stop").onclick = () => { try { window.speechSynthesis.cancel(); } catch (e) {} $("#summary-orb").className = "summary-orb"; };
+  $("#summary-stop").onclick = () => { stopSpeech(); $("#summary-orb").className = "summary-orb"; };
 
   // Voice assistant
   $("#assistant-fab").onclick = openAssistant;

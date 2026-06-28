@@ -46,6 +46,11 @@ fait automatiquement le pont TMDB → TVDB (via les `external_ids` de TMDB, avec
   correspondants sont **ajoutés automatiquement** à Radarr (films) ou Sonarr
   (séries). Gestion intégrée (lancer maintenant, pause, suppression). Persistées
   dans un volume (`DATA_DIR`).
+- **Résumé vocal naturel** : un bouton « 🔊 Résumé » sur chaque média demande à
+  l'IA (Mistral) un résumé parlé sans spoiler, lu à voix haute par **Piper**, un
+  moteur de synthèse vocale **open-source et gratuit** intégré à l'image (voix
+  française naturelle, hors-ligne, aucune clé). Repli sur la voix du navigateur
+  si besoin.
 - Les clés API restent **côté serveur** : le navigateur ne les voit jamais.
 
 ## 🚀 Démarrage rapide
