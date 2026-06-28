@@ -764,11 +764,18 @@ async def summarize(payload: dict[str, Any]) -> Any:
         "« Plongez », « Imaginez », « Préparez-vous », « Bienvenue » ni aucune "
         "formule toute faite. Varie l'ouverture et la structure. Pour ce résumé, "
         f"{angle}. Appuie-toi sur les détails concrets de CETTE œuvre (titre, "
-        "année, acteurs, genres) pour que le texte lui soit propre. Réponds "
-        "uniquement avec le texte du résumé."
+        "année, acteurs, genres) pour que le texte lui soit propre.\n"
+        "Le texte est destiné à être LU À VOIX HAUTE : n'utilise AUCun formatage "
+        "Markdown (pas d'astérisques *, pas de soulignés _, pas de dièses #, pas "
+        "de guillemets pour les titres). Écris les titres tels quels, en clair. "
+        "Réponds uniquement avec le texte brut du résumé."
     )
     import json as _json
+    import re as _re
     text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
+    # Defensive cleanup: strip Markdown emphasis so TTS doesn't read "astérisque".
+    text = _re.sub(r"[*_`#]+", "", text)
+    text = _re.sub(r"[ \t]{2,}", " ", text).strip()
     return {"title": title, "year": year, "summary": text}
 
 
