@@ -987,12 +987,14 @@ function populateVoiceSelect() {
   if (cur) { sel.value = cur.voiceURI; state.ttsVoiceURI = cur.voiceURI; }
 }
 
+const stripTtsTags = (s) => (s || "").replace(/\[\[\/?\w+\]\]/g, "");
+
 // Browser (Web Speech) fallback voice.
 function browserSpeak(text, orb) {
   try {
     if (!text || !window.speechSynthesis) { if (orb) orb.className = "summary-orb"; return; }
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(stripTtsTags(text));
     u.lang = "fr-FR";
     const v = selectedVoice();
     if (v) u.voice = v;
@@ -1018,7 +1020,7 @@ function stopSpeech() {
 
 // Speak via the self-hosted Piper engine (natural French voice); fall back to
 // the browser voice if it's unavailable or fails.
-async function speakText(text, orb) {
+async function speakText(text, orb, ttsText) {
   stopSpeech();
   if (!text) return;
   if (ttsAvailable()) {
@@ -1027,7 +1029,7 @@ async function speakText(text, orb) {
       const resp = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: ttsText || text }),
       });
       if (!resp.ok) throw new Error("tts " + resp.status);
       const url = URL.createObjectURL(await resp.blob());
@@ -1496,16 +1498,17 @@ async function summarizeMedia(m) {
       body: JSON.stringify({ tmdb_id: m.id, media: isTv() ? "tv" : "movie" }),
     });
     state.lastSummary = r.summary;
+    state.lastSummaryTTS = r.tts_text || r.summary;
     $("#summary-text").textContent = r.summary;
-    speakSummary(r.summary);
+    speakSummary(r.summary, state.lastSummaryTTS);
   } catch (e) {
     $("#summary-orb").className = "summary-orb";
     $("#summary-text").textContent = "Échec : " + e.message;
   }
 }
 
-function speakSummary(text) {
-  speakText(text, $("#summary-orb"));
+function speakSummary(text, ttsText) {
+  speakText(text, $("#summary-orb"), ttsText);
 }
 
 // ----------------------- helpers / UI binding -----------------------
@@ -1642,7 +1645,7 @@ function bindUI() {
   $("#summary-modal").addEventListener("click", (e) => {
     if (e.target.id === "summary-modal") closeSummary();
   });
-  $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary); };
+  $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary, state.lastSummaryTTS); };
   $("#summary-voice").onchange = (e) => {
     state.ttsVoiceURI = e.target.value;
     try { localStorage.setItem("ttsVoice", e.target.value); } catch (err) {}

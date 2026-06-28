@@ -10,6 +10,7 @@ WORKDIR /app
 ARG TARGETARCH
 ARG PIPER_VERSION=2023.11.14-2
 ARG PIPER_VOICE_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium
+ARG PIPER_EN_VOICE_BASE=https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates \
  && case "${TARGETARCH:-amd64}" in \
@@ -24,7 +25,10 @@ RUN apt-get update \
  && mkdir -p /opt/piper-voices \
  && (curl -fsSL -o /opt/piper-voices/fr_FR-siwis-medium.onnx "${PIPER_VOICE_BASE}/fr_FR-siwis-medium.onnx" \
      && curl -fsSL -o /opt/piper-voices/fr_FR-siwis-medium.onnx.json "${PIPER_VOICE_BASE}/fr_FR-siwis-medium.onnx.json" \
-     || echo "WARN: voix Piper non téléchargée — repli sur la voix du navigateur") \
+     || echo "WARN: voix FR Piper non téléchargée — repli sur la voix du navigateur") \
+ && (curl -fsSL -o /opt/piper-voices/en_US-lessac-medium.onnx "${PIPER_EN_VOICE_BASE}/en_US-lessac-medium.onnx" \
+     && curl -fsSL -o /opt/piper-voices/en_US-lessac-medium.onnx.json "${PIPER_EN_VOICE_BASE}/en_US-lessac-medium.onnx.json" \
+     || echo "WARN: voix EN Piper non téléchargée — titres anglais lus avec la voix FR") \
  && apt-get purge -y curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 

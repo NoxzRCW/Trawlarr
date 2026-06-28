@@ -49,8 +49,10 @@ fait automatiquement le pont TMDB → TVDB (via les `external_ids` de TMDB, avec
 - **Résumé vocal naturel** : un bouton « 🔊 Résumé » sur chaque média demande à
   l'IA (Mistral) un résumé parlé sans spoiler, lu à voix haute par **Piper**, un
   moteur de synthèse vocale **open-source et gratuit** intégré à l'image (voix
-  française naturelle, hors-ligne, aucune clé). Repli sur la voix du navigateur
-  si besoin.
+  française naturelle, hors-ligne, aucune clé). **Bilingue** : les titres/mots
+  anglais sont repérés par l'IA et lus avec une voix anglaise dédiée, le reste
+  en français, puis l'audio est assemblé. Repli sur la voix du navigateur si
+  besoin.
 - Les clés API restent **côté serveur** : le navigateur ne les voit jamais.
 
 ## 🚀 Démarrage rapide
