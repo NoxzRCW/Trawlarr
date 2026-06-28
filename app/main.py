@@ -11,11 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import tts as tts_engine
 from .config import settings
 from .mistral import MistralError, mistral
 from .radarr import RadarrError, radarr
@@ -178,7 +177,6 @@ async def get_config() -> dict[str, Any]:
             "radarr": bool(settings.radarr_api_key),
             "sonarr": bool(settings.sonarr_api_key),
             "mistral": bool(settings.mistral_api_key),
-            "tts": tts_engine.piper_available(),
         },
         "defaults": {
             "quality_profile_id": settings.radarr_quality_profile_id,
@@ -766,32 +764,12 @@ async def summarize(payload: dict[str, Any]) -> Any:
         "« Plongez », « Imaginez », « Préparez-vous », « Bienvenue » ni aucune "
         "formule toute faite. Varie l'ouverture et la structure. Pour ce résumé, "
         f"{angle}. Appuie-toi sur les détails concrets de CETTE œuvre (titre, "
-        "année, acteurs, genres) pour que le texte lui soit propre.\n"
-        "BALISAGE LANGUE (pour la synthèse vocale) : entoure chaque mot, nom ou "
-        "titre en anglais (ou autre langue non française) par [[en]] et [[/en]], "
-        "par exemple [[en]]The Last of Us[[/en]]. N'utilise ces balises QUE pour "
-        "le texte non francophone, jamais pour du français. "
-        "Réponds uniquement avec le texte du résumé."
+        "année, acteurs, genres) pour que le texte lui soit propre. Réponds "
+        "uniquement avec le texte du résumé."
     )
     import json as _json
-    tagged = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
-    clean = tts_engine.strip_tags(tagged)
-    return {"title": title, "year": year, "summary": clean, "tts_text": tagged}
-
-
-@app.post("/api/tts")
-async def text_to_speech(payload: dict[str, Any]) -> Any:
-    """Render text to natural French speech (WAV) via the self-hosted Piper engine."""
-    text = (payload.get("text") or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="Texte requis")
-    if not tts_engine.piper_available():
-        raise HTTPException(status_code=503, detail="Synthèse vocale serveur indisponible")
-    try:
-        audio = await tts_engine.synthesize(text)
-    except tts_engine.TTSError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    return Response(content=audio, media_type="audio/wav")
+    text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
+    return {"title": title, "year": year, "summary": text}
 
 
 # ----------------------- Auto-lists -----------------------

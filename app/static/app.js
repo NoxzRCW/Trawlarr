@@ -105,12 +105,8 @@ async function init() {
   if (state.config.integrations && state.config.integrations.mistral) {
     $("#assistant-fab").classList.remove("hidden");
   }
-  // Server-side Piper voice is used when available; the browser-voice picker is
-  // only relevant for the fallback, so hide it when Piper is on.
-  if (ttsAvailable()) {
-    const row = document.querySelector(".summary-voice-row");
-    if (row) row.style.display = "none";
-  } else if (window.speechSynthesis) {
+  // Voices load asynchronously in most browsers.
+  if (window.speechSynthesis) {
     populateVoiceSelect();
     window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
   }
@@ -1009,44 +1005,11 @@ function browserSpeak(text, orb) {
   } catch (e) { if (orb) orb.className = "summary-orb"; }
 }
 
-function ttsAvailable() {
-  return !!(state.config && state.config.integrations && state.config.integrations.tts);
-}
-
 function stopSpeech() {
-  if (state.currentAudio) { try { state.currentAudio.pause(); } catch (e) {} state.currentAudio = null; }
   try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
 }
 
-// Speak via the self-hosted Piper engine (natural French voice); fall back to
-// the browser voice if it's unavailable or fails.
-async function speakText(text, orb, ttsText) {
-  stopSpeech();
-  if (!text) return;
-  if (ttsAvailable()) {
-    try {
-      if (orb) orb.className = "summary-orb thinking";
-      const resp = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: ttsText || text }),
-      });
-      if (!resp.ok) throw new Error("tts " + resp.status);
-      const url = URL.createObjectURL(await resp.blob());
-      const audio = new Audio(url);
-      state.currentAudio = audio;
-      audio.onplay = () => { if (orb) orb.className = "summary-orb speaking"; };
-      audio.onended = () => { if (orb) orb.className = "summary-orb"; URL.revokeObjectURL(url); state.currentAudio = null; };
-      audio.onerror = () => { if (orb) orb.className = "summary-orb"; browserSpeak(text, orb); };
-      await audio.play();
-      return;
-    } catch (e) {
-      // fall through to browser voice
-    }
-  }
-  browserSpeak(text, orb);
-}
-
+function speakText(text, orb) { browserSpeak(text, orb); }
 function speak(text) { speakText(text); }
 
 function startListening() {
@@ -1498,17 +1461,16 @@ async function summarizeMedia(m) {
       body: JSON.stringify({ tmdb_id: m.id, media: isTv() ? "tv" : "movie" }),
     });
     state.lastSummary = r.summary;
-    state.lastSummaryTTS = r.tts_text || r.summary;
     $("#summary-text").textContent = r.summary;
-    speakSummary(r.summary, state.lastSummaryTTS);
+    speakSummary(r.summary);
   } catch (e) {
     $("#summary-orb").className = "summary-orb";
     $("#summary-text").textContent = "Échec : " + e.message;
   }
 }
 
-function speakSummary(text, ttsText) {
-  speakText(text, $("#summary-orb"), ttsText);
+function speakSummary(text) {
+  speakText(text, $("#summary-orb"));
 }
 
 // ----------------------- helpers / UI binding -----------------------
@@ -1645,7 +1607,7 @@ function bindUI() {
   $("#summary-modal").addEventListener("click", (e) => {
     if (e.target.id === "summary-modal") closeSummary();
   });
-  $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary, state.lastSummaryTTS); };
+  $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary); };
   $("#summary-voice").onchange = (e) => {
     state.ttsVoiceURI = e.target.value;
     try { localStorage.setItem("ttsVoice", e.target.value); } catch (err) {}

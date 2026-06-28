@@ -39,7 +39,3 @@ services:
       DATA_DIR: ${DATA_DIR:-/data}
       LIST_REFRESH_HOURS: ${LIST_REFRESH_HOURS:-12}
       LIST_MAX_PAGES: ${LIST_MAX_PAGES:-3}
-      # --- Piper TTS (voix française, intégrée à l'image) ---
-      PIPER_MODEL: ${PIPER_MODEL:-/opt/piper-voices/fr_FR-siwis-medium.onnx}
-      PIPER_EN_MODEL: ${PIPER_EN_MODEL:-/opt/piper-voices/en_US-lessac-medium.onnx}
-      PIPER_LENGTH_SCALE: ${PIPER_LENGTH_SCALE:-1.05}
