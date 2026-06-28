@@ -133,9 +133,11 @@ async function loadGenres() {
     chip.onclick = (ev) => {
       const cur = state.genres.get(g.id);
       if (ev.shiftKey) {
+        // PC shortcut: jump straight to exclude (toggle).
         state.genres.set(g.id, cur === "exclude" ? undefined : "exclude");
       } else {
-        state.genres.set(g.id, cur === "include" ? undefined : "include");
+        // Touch-friendly cycle: rien → inclure → exclure → rien.
+        state.genres.set(g.id, cur === undefined ? "include" : cur === "include" ? "exclude" : undefined);
       }
       const mode = state.genres.get(g.id);
       if (!mode) state.genres.delete(g.id);
