@@ -276,7 +276,9 @@ main { flex: 1; padding: 22px; min-width: 0; }
 .summary-orb.speaking { animation: orb 1.3s ease-in-out infinite; }
 .summary-orb.thinking { animation: orbspin 1s linear infinite; }
 .summary-text { font-size: 14px; line-height: 1.65; color: var(--text);
-  max-height: 48vh; overflow-y: auto; white-space: pre-wrap; }
+  max-height: 44vh; overflow-y: auto; white-space: pre-wrap; }
+.summary-voice-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 0; }
+.summary-voice-row select { width: auto; flex: 1; margin: 0; }
 .badge-in { font-size: 11px; color: var(--ok); text-align: center; padding: 9px; font-weight: 600; }
 .badge-new { font-size: 11px; color: var(--accent); font-weight: 700; text-align: center; padding: 9px; }
 

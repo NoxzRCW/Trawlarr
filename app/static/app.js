@@ -33,6 +33,7 @@ const state = {
   listModalProfiles: [],
   listModalFolders: [],
   hideOwned: false,
+  ttsVoiceURI: (typeof localStorage !== "undefined" && localStorage.getItem("ttsVoice")) || null,
   pageSize: 20,
   selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
   currentResults: [],    // movies shown on the current page
@@ -103,6 +104,11 @@ async function init() {
   applyMediaUI();
   if (state.config.integrations && state.config.integrations.mistral) {
     $("#assistant-fab").classList.remove("hidden");
+  }
+  // Voices load asynchronously in most browsers.
+  if (window.speechSynthesis) {
+    populateVoiceSelect();
+    window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
   }
   await Promise.all([loadHealth(), loadGenres(), loadProviders(), loadLibraryOptions()]);
   bindUI();
@@ -944,15 +950,59 @@ function closeAssistant() {
   $("#assistant-fab").classList.remove("listening");
 }
 
-function speak(text) {
+// ---- Natural French voice selection ----
+function frenchVoices() {
+  if (!window.speechSynthesis) return [];
+  return window.speechSynthesis.getVoices().filter((v) => /^fr(\b|-|_)/i.test(v.lang));
+}
+// Rank voices: cloud/“natural”/named voices sound better than default robotic ones.
+function rankVoice(v) {
+  const n = (v.name || "").toLowerCase();
+  let s = 0;
+  if (n.includes("google")) s += 6;
+  if (n.includes("natural") || n.includes("naturel")) s += 6;
+  if (/(amélie|amelie|thomas|audrey|marie|denise|henri|charlotte|claude|paul)/.test(n)) s += 3;
+  if (v.localService === false) s += 2;  // online voices are usually higher quality
+  return s;
+}
+function pickDefaultVoice(voices) {
+  return voices.slice().sort((a, b) => rankVoice(b) - rankVoice(a))[0] || null;
+}
+function selectedVoice() {
+  const voices = frenchVoices();
+  return voices.find((v) => v.voiceURI === state.ttsVoiceURI) || pickDefaultVoice(voices);
+}
+function populateVoiceSelect() {
+  const sel = $("#summary-voice");
+  if (!sel) return;
+  const voices = frenchVoices();
+  sel.innerHTML = voices.length
+    ? voices.map((v) => `<option value="${v.voiceURI}">${v.name}</option>`).join("")
+    : '<option value="">(voix système par défaut)</option>';
+  const cur = selectedVoice();
+  if (cur) { sel.value = cur.voiceURI; state.ttsVoiceURI = cur.voiceURI; }
+}
+
+function speakText(text, orb) {
   try {
-    if (!text || !window.speechSynthesis) return;
+    if (!text || !window.speechSynthesis) { if (orb) orb.className = "summary-orb"; return; }
+    window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "fr-FR";
-    window.speechSynthesis.cancel();
+    const v = selectedVoice();
+    if (v) u.voice = v;
+    u.rate = 1.0;
+    u.pitch = 1.05;
+    if (orb) {
+      u.onstart = () => { orb.className = "summary-orb speaking"; };
+      u.onend = () => { orb.className = "summary-orb"; };
+      u.onerror = () => { orb.className = "summary-orb"; };
+    }
     window.speechSynthesis.speak(u);
-  } catch (e) { /* TTS optional */ }
+  } catch (e) { if (orb) orb.className = "summary-orb"; }
 }
+
+function speak(text) { speakText(text); }
 
 function startListening() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1412,17 +1462,7 @@ async function summarizeMedia(m) {
 }
 
 function speakSummary(text) {
-  const orb = $("#summary-orb");
-  try {
-    if (!window.speechSynthesis) { orb.className = "summary-orb"; return; }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "fr-FR";
-    u.onstart = () => { orb.className = "summary-orb speaking"; };
-    u.onend = () => { orb.className = "summary-orb"; };
-    u.onerror = () => { orb.className = "summary-orb"; };
-    window.speechSynthesis.speak(u);
-  } catch (e) { orb.className = "summary-orb"; }
+  speakText(text, $("#summary-orb"));
 }
 
 // ----------------------- helpers / UI binding -----------------------
@@ -1560,6 +1600,11 @@ function bindUI() {
     if (e.target.id === "summary-modal") closeSummary();
   });
   $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary); };
+  $("#summary-voice").onchange = (e) => {
+    state.ttsVoiceURI = e.target.value;
+    try { localStorage.setItem("ttsVoice", e.target.value); } catch (err) {}
+    if (state.lastSummary) speakSummary(state.lastSummary);
+  };
   $("#summary-stop").onclick = () => { try { window.speechSynthesis.cancel(); } catch (e) {} $("#summary-orb").className = "summary-orb"; };
 
   // Voice assistant
