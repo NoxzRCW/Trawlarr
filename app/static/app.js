@@ -367,6 +367,12 @@ function renderResults(movies) {
     detailBtn.onclick = () => openDetails(m);
     body.appendChild(detailBtn);
 
+    if (state.config.integrations && state.config.integrations.mistral) {
+      const sumBtn = el("button", "summary-btn", "🔊 Résumé");
+      sumBtn.onclick = () => summarizeMedia(m);
+      body.appendChild(sumBtn);
+    }
+
     if (isOwned(m)) {
       body.appendChild(el("div", "badge-in", `✓ Déjà dans ${libName()}`));
     } else {
@@ -1376,6 +1382,49 @@ async function deleteList(id) {
   } catch (e) { toast("Échec : " + e.message, false); }
 }
 
+// ----------------------- spoken summary -----------------------
+function closeSummary() {
+  $("#summary-modal").classList.add("hidden");
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  $("#summary-orb").className = "summary-orb";
+}
+
+async function summarizeMedia(m) {
+  const modal = $("#summary-modal");
+  modal.classList.remove("hidden");
+  $("#summary-title").textContent = m.title || m.name;
+  $("#summary-text").textContent = "";
+  $("#summary-orb").className = "summary-orb thinking";
+  document.getElementById("summary-text").textContent = "Génération du résumé par l'IA…";
+  try {
+    const r = await api("/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tmdb_id: m.id, media: isTv() ? "tv" : "movie" }),
+    });
+    state.lastSummary = r.summary;
+    $("#summary-text").textContent = r.summary;
+    speakSummary(r.summary);
+  } catch (e) {
+    $("#summary-orb").className = "summary-orb";
+    $("#summary-text").textContent = "Échec : " + e.message;
+  }
+}
+
+function speakSummary(text) {
+  const orb = $("#summary-orb");
+  try {
+    if (!window.speechSynthesis) { orb.className = "summary-orb"; return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "fr-FR";
+    u.onstart = () => { orb.className = "summary-orb speaking"; };
+    u.onend = () => { orb.className = "summary-orb"; };
+    u.onerror = () => { orb.className = "summary-orb"; };
+    window.speechSynthesis.speak(u);
+  } catch (e) { orb.className = "summary-orb"; }
+}
+
 // ----------------------- helpers / UI binding -----------------------
 function fmtBytes(b) {
   if (!b) return "0 o";
@@ -1480,6 +1529,7 @@ function bindUI() {
     if (e.key === "Escape") {
       $("#detail-modal").classList.add("hidden");
       $("#modal").classList.add("hidden");
+      closeSummary();
       closeAssistant();
     }
   });
@@ -1503,6 +1553,14 @@ function bindUI() {
   $("#lists-modal").addEventListener("click", (e) => {
     if (e.target.id === "lists-modal") $("#lists-modal").classList.add("hidden");
   });
+
+  // Spoken summary
+  $("#summary-close").onclick = closeSummary;
+  $("#summary-modal").addEventListener("click", (e) => {
+    if (e.target.id === "summary-modal") closeSummary();
+  });
+  $("#summary-replay").onclick = () => { if (state.lastSummary) speakSummary(state.lastSummary); };
+  $("#summary-stop").onclick = () => { try { window.speechSynthesis.cancel(); } catch (e) {} $("#summary-orb").className = "summary-orb"; };
 
   // Voice assistant
   $("#assistant-fab").onclick = openAssistant;

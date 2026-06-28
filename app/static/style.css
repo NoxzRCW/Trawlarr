@@ -262,6 +262,21 @@ main { flex: 1; padding: 22px; min-width: 0; }
 .card .rating { color: var(--accent); font-weight: 700; }
 .card button { width: 100%; }
 .card .detail-btn { background: var(--glass-2); color: var(--text); }
+.card .summary-btn { background: var(--glass-2); color: var(--text); }
+.card .summary-btn:hover { border-color: var(--c2); color: #fff; }
+
+/* Spoken summary modal */
+#summary-modal { z-index: 65; }
+.summary-orb {
+  width: 64px; height: 64px; border-radius: 50%; align-self: center;
+  display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff;
+  background: radial-gradient(circle at 30% 30%, #7c5cff, #22d3ee);
+  box-shadow: 0 0 30px rgba(124,92,255,.5);
+}
+.summary-orb.speaking { animation: orb 1.3s ease-in-out infinite; }
+.summary-orb.thinking { animation: orbspin 1s linear infinite; }
+.summary-text { font-size: 14px; line-height: 1.65; color: var(--text);
+  max-height: 48vh; overflow-y: auto; white-space: pre-wrap; }
 .badge-in { font-size: 11px; color: var(--ok); text-align: center; padding: 9px; font-weight: 600; }
 .badge-new { font-size: 11px; color: var(--accent); font-weight: 700; text-align: center; padding: 9px; }
 

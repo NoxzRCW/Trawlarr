@@ -712,6 +712,50 @@ async def assistant(payload: dict[str, Any]) -> Any:
     return plan
 
 
+@app.post("/api/summarize")
+async def summarize(payload: dict[str, Any]) -> Any:
+    """Generate a short, spoiler-free spoken summary (synopsis, cast, themes)."""
+    tmdb_id = payload.get("tmdb_id")
+    if not tmdb_id:
+        raise HTTPException(status_code=400, detail="tmdb_id requis")
+    media = "tv" if payload.get("media") == "tv" else "movie"
+
+    d = await (tmdb.tv(int(tmdb_id)) if media == "tv" else tmdb.movie(int(tmdb_id)))
+    title = d.get("title") or d.get("name")
+    year = (d.get("release_date") or d.get("first_air_date") or "")[:4]
+    genres = [g["name"] for g in d.get("genres", [])]
+    cast_src = (d.get("aggregate_credits") or {}).get("cast") if media == "tv" else None
+    cast_src = cast_src or (d.get("credits") or {}).get("cast") or []
+    cast = []
+    for c in cast_src[:6]:
+        ch = c.get("character") or (c.get("roles") or [{}])[0].get("character")
+        cast.append(f"{c.get('name')}" + (f" ({ch})" if ch else ""))
+
+    context = {
+        "titre": title,
+        "année": year,
+        "type": "série" if media == "tv" else "film",
+        "genres": genres,
+        "synopsis_officiel": d.get("overview", ""),
+        "acteurs_principaux": cast,
+        "note_tmdb": d.get("vote_average"),
+        "pays": [c.get("name") for c in d.get("production_countries", [])],
+        "créateurs": [c.get("name") for c in d.get("created_by", [])] if media == "tv" else None,
+    }
+    system = (
+        "Tu es un présentateur ciné/séries chaleureux. À partir des données "
+        "fournies (JSON), rédige en français un résumé ORAL d'environ 120 à 180 "
+        "mots, à lire à voix haute. Présente le média, son genre et son ambiance, "
+        "cite les acteurs principaux et les thèmes abordés, et indique à quel "
+        "public il plaira. STRICTEMENT SANS SPOILER : ne révèle aucun "
+        "rebondissement ni la fin. Style fluide et naturel, sans listes ni "
+        "titres, juste un paragraphe parlé. Réponds uniquement avec le texte."
+    )
+    import json as _json
+    text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False))
+    return {"title": title, "year": year, "summary": text}
+
+
 # ----------------------- Auto-lists -----------------------
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

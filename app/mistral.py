@@ -26,6 +26,27 @@ class MistralClient:
         self.api_key = api_key
         self.model = model
 
+    async def chat_text(self, system: str, user: str, temperature: float = 0.5) -> str:
+        if not self.api_key:
+            raise MistralError("MISTRAL_API_KEY non configurée sur le serveur.")
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            resp = await client.post(MISTRAL_URL, headers=headers, json=body)
+        if resp.status_code >= 400:
+            raise MistralError(f"Mistral {resp.status_code}: {resp.text}")
+        try:
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError) as e:
+            raise MistralError(f"Réponse de l'IA illisible : {e}")
+
     async def chat_json(self, system: str, user: str) -> dict[str, Any]:
         if not self.api_key:
             raise MistralError("MISTRAL_API_KEY non configurée sur le serveur.")

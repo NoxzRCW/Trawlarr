@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=16" />
+  <link rel="stylesheet" href="/style.css?v=17" />
 </head>
 <body>
   <header>
@@ -269,6 +269,20 @@
     </div>
   </div>
 
+  <!-- Spoken summary modal -->
+  <div id="summary-modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="summary-close" class="detail-close" aria-label="Fermer">✕</button>
+      <h3 id="summary-title">Résumé</h3>
+      <div id="summary-orb" class="summary-orb">🔊</div>
+      <div id="summary-text" class="summary-text"></div>
+      <div class="actions">
+        <button id="summary-replay">🔊 Réécouter</button>
+        <button id="summary-stop">⏹ Stop</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Voice assistant (Mistral AI) -->
   <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">🎙️</button>
   <div id="assistant-overlay" class="modal hidden">
@@ -286,6 +300,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=16"></script>
+  <script src="/app.js?v=17"></script>
 </body>
 </html>
