@@ -41,6 +41,11 @@ fait automatiquement le pont TMDB → TVDB (via les `external_ids` de TMDB, avec
   la recherche, ou propose des recommandations. Reconnaissance vocale via le
   navigateur (Web Speech API), réponse parlée optionnelle. Désactivé tant que
   `MISTRAL_API_KEY` n'est pas défini.
+- **Listes automatiques** : enregistrez vos filtres comme une « liste » ; elle
+  est **rescannée toutes les 12h** (et au démarrage) et les nouveaux médias
+  correspondants sont **ajoutés automatiquement** à Radarr (films) ou Sonarr
+  (séries). Gestion intégrée (lancer maintenant, pause, suppression). Persistées
+  dans un volume (`DATA_DIR`).
 - Les clés API restent **côté serveur** : le navigateur ne les voit jamais.
 
 ## 🚀 Démarrage rapide

@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     mistral_api_key: str = ""
     mistral_model: str = "mistral-large-latest"
 
+    # Auto-lists (smart lists scanned periodically)
+    data_dir: str = "/data"            # persisted volume for lists.json
+    list_refresh_hours: int = 12       # how often each list is rescanned
+    list_max_pages: int = 3            # default TMDB pages scanned per run (~20/page)
+
     app_title: str = "Media Search"
 
     @field_validator(

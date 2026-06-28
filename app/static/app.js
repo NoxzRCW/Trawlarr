@@ -1094,6 +1094,179 @@ function showAssistantBanner(text) {
   b.classList.remove("hidden");
 }
 
+// ----------------------- auto-lists -----------------------
+function genreName(id) {
+  const c = document.querySelector(`#f-genres .chip[data-gid="${id}"]`);
+  return c ? c.textContent : id;
+}
+
+function describeFilters(f) {
+  if (!f) return "";
+  const parts = [];
+  if (f.sort_by) parts.push("tri " + f.sort_by);
+  if (f.with_genres) parts.push("genres " + f.with_genres.split(",").map(genreName).join("/"));
+  if (f.without_genres) parts.push("sauf " + f.without_genres.split(",").map(genreName).join("/"));
+  const dg = f["primary_release_date.gte"] || f["first_air_date.gte"];
+  const dl = f["primary_release_date.lte"] || f["first_air_date.lte"];
+  if (dg) parts.push("depuis " + dg);
+  if (dl) parts.push("jusqu'à " + dl);
+  if (f.primary_release_year || f.first_air_date_year) parts.push("année " + (f.primary_release_year || f.first_air_date_year));
+  if (f["vote_average.gte"]) parts.push("note ≥ " + f["vote_average.gte"]);
+  if (f["vote_count.gte"]) parts.push("votes ≥ " + f["vote_count.gte"]);
+  if (f.with_original_language) parts.push("langue " + f.with_original_language);
+  if (f.with_origin_country) parts.push("pays " + f.with_origin_country);
+  if (f.with_watch_providers) parts.push("plateformes");
+  return parts.join(" · ");
+}
+
+// Capture the current discover filters (strip pagination-only params).
+function captureFilters() {
+  const p = buildDiscoverParams();
+  const obj = {};
+  for (const [k, v] of p.entries()) {
+    if (k === "cursor" || k === "page_size" || k === "hide_owned") continue;
+    obj[k] = v;
+  }
+  return obj;
+}
+
+function openCreateList() {
+  if (!state.profiles.length) {
+    toast(`Options ${libName()} indisponibles`, false);
+    return;
+  }
+  state.pendingListFilters = captureFilters();
+  $("#list-summary").textContent =
+    `${isTv() ? "Séries (Sonarr)" : "Films (Radarr)"} · ${describeFilters(state.pendingListFilters) || "aucun filtre (tout)"}`;
+  $("#list-profile").innerHTML = state.profiles.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+  $("#list-folder").innerHTML = state.folders.map((f) => `<option value="${f.path}">${f.path}</option>`).join("");
+  const d = libDefaults();
+  if (d.quality_profile_id) $("#list-profile").value = d.quality_profile_id;
+  if (d.root_folder) $("#list-folder").value = d.root_folder;
+  $("#list-availability-row").hidden = isTv();
+  $("#list-name").value = "";
+  $("#list-monitor").checked = true;
+  $("#list-searchnow").checked = true;
+  $("#list-maxpages").value = 3;
+  $("#list-modal").classList.remove("hidden");
+}
+
+async function saveList() {
+  const name = $("#list-name").value.trim();
+  if (!name) { toast("Donnez un nom à la liste", false); return; }
+  const body = {
+    name,
+    media: state.media,
+    filters: state.pendingListFilters,
+    quality_profile_id: Number($("#list-profile").value) || null,
+    root_folder: $("#list-folder").value || null,
+    monitor: $("#list-monitor").checked,
+    search_on_add: $("#list-searchnow").checked,
+    max_pages: Number($("#list-maxpages").value) || 3,
+  };
+  if (!isTv()) body.minimum_availability = $("#list-availability").value;
+  const btn = $("#list-save");
+  btn.disabled = true; btn.textContent = "Enregistrement…";
+  try {
+    await api("/lists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    toast(`Liste « ${name} » créée ✓`);
+    $("#list-modal").classList.add("hidden");
+  } catch (e) {
+    toast("Échec : " + e.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = "Enregistrer la liste";
+  }
+}
+
+async function openLists() {
+  $("#lists-modal").classList.remove("hidden");
+  $("#lists-body").innerHTML = "<p class='muted'>Chargement…</p>";
+  try {
+    renderLists(await api("/lists"));
+  } catch (e) {
+    $("#lists-body").innerHTML = "Erreur : " + e.message;
+  }
+}
+
+function renderLists(lists) {
+  const box = $("#lists-body");
+  box.innerHTML = "";
+  if (!lists.length) {
+    box.innerHTML = "<p class='muted'>Aucune liste pour le moment. Réglez des filtres puis « 💾 Créer une liste auto ».</p>";
+    return;
+  }
+  lists.forEach((l) => {
+    const card = el("div", "list-card");
+    const head = el("div", "lc-head");
+    head.appendChild(el("span", "lc-name", l.name));
+    head.appendChild(el("span", "list-badge", l.media === "tv" ? "📺 Séries" : "🎬 Films"));
+    head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? "Active" : "En pause"));
+    card.appendChild(head);
+
+    const meta = el("div", "lc-meta");
+    meta.innerHTML =
+      `Filtres : <span class="lc-filters">${describeFilters(l.filters) || "aucun (tout)"}</span><br>` +
+      `${l.max_pages} page(s) scannée(s) · dernier scan : ${l.last_run ? new Date(l.last_run).toLocaleString("fr-FR") : "jamais"} · total ajoutés : ${l.total_added || 0}`;
+    card.appendChild(meta);
+
+    if (l.last_result) {
+      const r = l.last_result;
+      const res = el("div", "lc-result");
+      res.innerHTML = r.error
+        ? `⚠️ ${r.error}`
+        : `Dernier passage : <b>${r.added}</b> ajouté(s), ${r.skipped} déjà présent(s), ${r.errors} erreur(s)` +
+          (r.added_titles && r.added_titles.length ? ` — ${r.added_titles.slice(0, 5).join(", ")}${r.added_titles.length > 5 ? "…" : ""}` : "");
+      card.appendChild(res);
+    }
+
+    const actions = el("div", "lc-actions");
+    const run = el("button", "primary", "▶ Lancer maintenant");
+    run.onclick = () => runListNow(l.id, run);
+    const toggle = el("button", null, l.enabled ? "⏸ Mettre en pause" : "▶ Activer");
+    toggle.onclick = () => toggleList(l);
+    const del = el("button", null, "🗑 Supprimer");
+    del.onclick = () => deleteList(l.id);
+    actions.append(run, toggle, del);
+    card.appendChild(actions);
+    box.appendChild(card);
+  });
+}
+
+async function runListNow(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Scan en cours…"; }
+  try {
+    const r = await api(`/lists/${id}/run`, { method: "POST" });
+    toast(r.error ? "Erreur : " + r.error : `${r.added} ajouté(s), ${r.skipped} déjà présent(s)`, !r.error);
+    renderLists(await api("/lists"));
+  } catch (e) {
+    toast("Échec : " + e.message, false);
+    if (btn) { btn.disabled = false; btn.textContent = "▶ Lancer maintenant"; }
+  }
+}
+
+async function toggleList(l) {
+  try {
+    await api(`/lists/${l.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...l, enabled: !l.enabled }),
+    });
+    renderLists(await api("/lists"));
+  } catch (e) { toast("Échec : " + e.message, false); }
+}
+
+async function deleteList(id) {
+  if (!confirm("Supprimer définitivement cette liste ?")) return;
+  try {
+    await api(`/lists/${id}`, { method: "DELETE" });
+    renderLists(await api("/lists"));
+  } catch (e) { toast("Échec : " + e.message, false); }
+}
+
 // ----------------------- helpers / UI binding -----------------------
 function fmtBytes(b) {
   if (!b) return "0 o";
@@ -1200,6 +1373,19 @@ function bindUI() {
       $("#modal").classList.add("hidden");
       closeAssistant();
     }
+  });
+
+  // Auto-lists
+  $("#btn-create-list").onclick = openCreateList;
+  $("#btn-manage-lists").onclick = openLists;
+  $("#list-save").onclick = saveList;
+  $("#list-cancel").onclick = () => $("#list-modal").classList.add("hidden");
+  $("#list-modal").addEventListener("click", (e) => {
+    if (e.target.id === "list-modal") $("#list-modal").classList.add("hidden");
+  });
+  $("#lists-close").onclick = () => $("#lists-modal").classList.add("hidden");
+  $("#lists-modal").addEventListener("click", (e) => {
+    if (e.target.id === "lists-modal") $("#lists-modal").classList.add("hidden");
   });
 
   // Voice assistant

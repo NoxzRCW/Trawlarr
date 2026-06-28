@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    volumes:
+      # Persiste les listes automatiques entre les redémarrages.
+      - ./data:/data
     environment:
       # --- TMDB ---
       TMDB_API_KEY: ${TMDB_API_KEY}
@@ -32,3 +35,7 @@ services:
       # --- Mistral AI (voice assistant, optional) ---
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}
+      # --- Auto-lists ---
+      DATA_DIR: ${DATA_DIR:-/data}
+      LIST_REFRESH_HOURS: ${LIST_REFRESH_HOURS:-12}
+      LIST_MAX_PAGES: ${LIST_MAX_PAGES:-3}

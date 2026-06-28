@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=12" />
+  <link rel="stylesheet" href="/style.css?v=13" />
 </head>
 <body>
   <header>
@@ -151,6 +151,10 @@
         <button id="btn-search" class="primary">Rechercher</button>
         <button id="btn-reset">Réinitialiser</button>
       </div>
+      <div class="actions">
+        <button id="btn-create-list">💾 Créer une liste auto</button>
+        <button id="btn-manage-lists">📋 Mes listes</button>
+      </div>
     </aside>
 
     <!-- ===================== Results ===================== -->
@@ -213,6 +217,45 @@
     </div>
   </div>
 
+  <!-- Create auto-list modal -->
+  <div id="list-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>💾 Créer une liste automatique</h3>
+      <div id="list-summary" class="muted"></div>
+      <label>Nom de la liste <input type="text" id="list-name" placeholder="ex: Horreur années 80" /></label>
+      <label>Profil de qualité <select id="list-profile"></select></label>
+      <label>Dossier racine <select id="list-folder"></select></label>
+      <label id="list-availability-row">Disponibilité minimale
+        <select id="list-availability">
+          <option value="announced">Annoncé</option>
+          <option value="inCinemas">En salle</option>
+          <option value="released" selected>Sorti</option>
+        </select>
+      </label>
+      <label>Pages TMDB scannées par passage (≈20 médias/page)
+        <input type="number" id="list-maxpages" min="1" max="10" value="3" />
+      </label>
+      <label class="checkbox"><input type="checkbox" id="list-monitor" checked /> Surveiller</label>
+      <label class="checkbox"><input type="checkbox" id="list-searchnow" checked /> Lancer la recherche à l'ajout</label>
+      <div class="actions">
+        <button id="list-save" class="primary">Enregistrer la liste</button>
+        <button id="list-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lists manager modal -->
+  <div id="lists-modal" class="modal hidden">
+    <div class="detail-content">
+      <button id="lists-close" class="detail-close" aria-label="Fermer">✕</button>
+      <div class="lists-wrap">
+        <h2>📋 Mes listes automatiques</h2>
+        <p class="muted">Rescannées toutes les 12h (et au démarrage). Les nouveaux médias correspondant aux filtres sont ajoutés automatiquement à Radarr (films) ou Sonarr (séries).</p>
+        <div id="lists-body"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Voice assistant (Mistral AI) -->
   <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">🎙️</button>
   <div id="assistant-overlay" class="modal hidden">
@@ -230,6 +273,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=12"></script>
+  <script src="/app.js?v=13"></script>
 </body>
 </html>

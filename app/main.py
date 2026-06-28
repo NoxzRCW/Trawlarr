@@ -6,6 +6,8 @@ leave the server.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +19,23 @@ from .config import settings
 from .mistral import MistralError, mistral
 from .radarr import RadarrError, radarr
 from .sonarr import SonarrError, sonarr
+from .store import store
 from .tmdb import IMAGE_BASE, TMDBError, tmdb
 
-app = FastAPI(title=settings.app_title)
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Background scheduler that rescans auto-lists periodically.
+    task = asyncio.create_task(_scheduler_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title=settings.app_title, lifespan=lifespan)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -694,6 +710,204 @@ async def assistant(payload: dict[str, Any]) -> Any:
         plan["results"] = await _resolve_titles(plan.get("titles") or [], plan["media"])
 
     return plan
+
+
+# ----------------------- Auto-lists -----------------------
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def _add_movie_from_list(lst: dict[str, Any], tmdb_id: int) -> dict[str, Any]:
+    return await radarr.add_movie(
+        tmdb_id=tmdb_id,
+        quality_profile_id=int(lst["quality_profile_id"]),
+        root_folder_path=lst["root_folder"],
+        monitored=lst.get("monitor", True),
+        search_on_add=lst.get("search_on_add", True),
+        minimum_availability=lst.get("minimum_availability", settings.radarr_minimum_availability),
+    )
+
+
+async def _add_series_from_list(lst: dict[str, Any], tmdb_id: int) -> dict[str, Any]:
+    tvdb_id = await _resolve_tvdb(int(tmdb_id))
+    if not tvdb_id:
+        raise SonarrError(f"Pas d'identifiant TVDB pour la série TMDB {tmdb_id}")
+    return await sonarr.add_series(
+        tvdb_id=int(tvdb_id),
+        quality_profile_id=int(lst["quality_profile_id"]),
+        root_folder_path=lst["root_folder"],
+        monitored=lst.get("monitor", True),
+        search_on_add=lst.get("search_on_add", True),
+        season_folder=lst.get("season_folder", settings.sonarr_season_folder),
+        series_type=lst.get("series_type", settings.sonarr_series_type),
+    )
+
+
+async def _resolve_list_add_target(lst: dict[str, Any]) -> dict[str, Any]:
+    """Fill in quality profile / root folder defaults for a list if missing."""
+    media = lst.get("media")
+    client = sonarr if media == "tv" else radarr
+    if not lst.get("quality_profile_id"):
+        profiles = await client.quality_profiles()
+        if not profiles:
+            raise RuntimeError(f"Aucun profil de qualité {media} disponible")
+        lst["quality_profile_id"] = profiles[0]["id"]
+    if not lst.get("root_folder"):
+        folders = await client.root_folders()
+        if not folders:
+            raise RuntimeError(f"Aucun dossier racine {media} disponible")
+        lst["root_folder"] = folders[0]["path"]
+    return lst
+
+
+async def run_list(lst: dict[str, Any]) -> dict[str, Any]:
+    """Scan a list's filters on TMDB and add any matching media not yet present
+    in the library. Returns a result summary (also persisted on the list)."""
+    media = "tv" if lst.get("media") == "tv" else "movie"
+    filters = dict(lst.get("filters") or {})
+    max_pages = int(lst.get("max_pages") or settings.list_max_pages)
+    result: dict[str, Any] = {
+        "at": _now_iso(), "checked": 0, "added": 0, "skipped": 0,
+        "errors": 0, "added_titles": [], "error": None,
+    }
+    try:
+        await _resolve_list_add_target(lst)
+        if media == "tv":
+            existing_tmdb, existing_tvdb = await sonarr.existing_ids()
+        else:
+            existing_movie = await radarr.existing_tmdb_ids()
+
+        for page in range(1, max_pages + 1):
+            params = {**filters, "page": page}
+            data = await (tmdb.discover_tv(params) if media == "tv" else tmdb.discover_movie(params))
+            results = data.get("results", [])
+            if not results:
+                break
+            for m in results:
+                tid = m.get("id")
+                if not tid:
+                    continue
+                result["checked"] += 1
+                title = m.get("title") or m.get("name") or str(tid)
+                try:
+                    if media == "tv":
+                        if tid in existing_tmdb:
+                            result["skipped"] += 1
+                            continue
+                        tvdb_id = await _resolve_tvdb(int(tid))
+                        if tvdb_id and tvdb_id in existing_tvdb:
+                            result["skipped"] += 1
+                            continue
+                        await _add_series_from_list(lst, int(tid))
+                        if tvdb_id:
+                            existing_tvdb.add(tvdb_id)
+                        existing_tmdb.add(tid)
+                    else:
+                        if tid in existing_movie:
+                            result["skipped"] += 1
+                            continue
+                        await _add_movie_from_list(lst, int(tid))
+                        existing_movie.add(tid)
+                    result["added"] += 1
+                    if len(result["added_titles"]) < 50:
+                        result["added_titles"].append(title)
+                except (RadarrError, SonarrError, TMDBError):
+                    result["errors"] += 1
+            if page >= (data.get("total_pages") or 1):
+                break
+    except Exception as e:  # noqa: BLE001 - record the failure on the list
+        result["error"] = str(e)
+
+    patch = {
+        "last_run": _now_iso(),
+        "last_result": result,
+        "total_added": int(lst.get("total_added") or 0) + result["added"],
+        # Persist any defaults we resolved so the UI shows them.
+        "quality_profile_id": lst.get("quality_profile_id"),
+        "root_folder": lst.get("root_folder"),
+    }
+    await store.update(lst["id"], patch)
+    return result
+
+
+async def _scheduler_loop() -> None:
+    interval = max(1, int(settings.list_refresh_hours)) * 3600
+    # Small initial delay so the app finishes starting up first.
+    await asyncio.sleep(10)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            for lst in await store.all():
+                if not lst.get("enabled", True):
+                    continue
+                last = lst.get("last_run")
+                due = True
+                if last:
+                    try:
+                        due = (now - datetime.fromisoformat(last)).total_seconds() >= interval
+                    except ValueError:
+                        due = True
+                if due:
+                    await run_list(lst)
+        except Exception:  # noqa: BLE001 - never let the scheduler die
+            pass
+        # Tick hourly; each list still only runs once per refresh interval.
+        await asyncio.sleep(min(interval, 3600))
+
+
+def _list_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    media = "tv" if payload.get("media") == "tv" else "movie"
+    return {
+        "name": (payload.get("name") or "Liste sans nom").strip(),
+        "media": media,
+        "filters": payload.get("filters") or {},
+        "quality_profile_id": payload.get("quality_profile_id") or None,
+        "root_folder": payload.get("root_folder") or None,
+        "monitor": bool(payload.get("monitor", True)),
+        "search_on_add": bool(payload.get("search_on_add", True)),
+        "minimum_availability": payload.get("minimum_availability", settings.radarr_minimum_availability),
+        "series_type": payload.get("series_type", settings.sonarr_series_type),
+        "season_folder": bool(payload.get("season_folder", settings.sonarr_season_folder)),
+        "enabled": bool(payload.get("enabled", True)),
+        "max_pages": int(payload.get("max_pages") or settings.list_max_pages),
+    }
+
+
+@app.get("/api/lists")
+async def get_lists() -> Any:
+    return await store.all()
+
+
+@app.post("/api/lists")
+async def create_list(payload: dict[str, Any]) -> Any:
+    obj = _list_from_payload(payload)
+    obj.update({"created_at": _now_iso(), "last_run": None, "last_result": None, "total_added": 0})
+    created = await store.create(obj)
+    return created
+
+
+@app.put("/api/lists/{list_id}")
+async def update_list(list_id: str, payload: dict[str, Any]) -> Any:
+    patch = _list_from_payload(payload)
+    updated = await store.update(list_id, patch)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Liste introuvable")
+    return updated
+
+
+@app.delete("/api/lists/{list_id}")
+async def delete_list(list_id: str) -> Any:
+    if not await store.delete(list_id):
+        raise HTTPException(status_code=404, detail="Liste introuvable")
+    return {"deleted": True}
+
+
+@app.post("/api/lists/{list_id}/run")
+async def run_list_now(list_id: str) -> Any:
+    lst = await store.get(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste introuvable")
+    return await run_list(lst)
 
 
 # ----------------------- Static frontend (mounted last) -----------------------
