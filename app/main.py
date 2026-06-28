@@ -910,5 +910,37 @@ async def run_list_now(list_id: str) -> Any:
     return await run_list(lst)
 
 
+@app.post("/api/lists/preview")
+async def preview_list(payload: dict[str, Any]) -> Any:
+    """Show which media match a set of filters (annotated with library
+    ownership) WITHOUT adding anything. Works for unsaved or saved lists."""
+    media = "tv" if payload.get("media") == "tv" else "movie"
+    filters = payload.get("filters") or {}
+    max_pages = max(1, min(int(payload.get("max_pages") or settings.list_max_pages), 10))
+    mark, field = await (_tv_owner() if media == "tv" else _movie_owner())
+
+    results: list[dict[str, Any]] = []
+    total_results = 0
+    for page in range(1, max_pages + 1):
+        data = await (tmdb.discover_tv({**filters, "page": page}) if media == "tv"
+                      else tmdb.discover_movie({**filters, "page": page}))
+        total_results = data.get("total_results", 0)
+        page_results = data.get("results", [])
+        results.extend(page_results)
+        if page >= (data.get("total_pages") or 1):
+            break
+
+    await mark(results)
+    owned = sum(1 for m in results if m.get(field))
+    return {
+        "media": media,
+        "results": results,
+        "scanned": len(results),
+        "total_results": total_results,
+        "owned": owned,
+        "new": len(results) - owned,
+    }
+
+
 # ----------------------- Static frontend (mounted last) -----------------------
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

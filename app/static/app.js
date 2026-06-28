@@ -27,6 +27,11 @@ const state = {
   folders: [],
   pendingMovie: null,
   bulkMovies: null,
+  pendingListFilters: {},
+  editingListId: null,
+  listModalMedia: "movie",
+  listModalProfiles: [],
+  listModalFolders: [],
   hideOwned: false,
   pageSize: 20,
   selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
@@ -1130,33 +1135,85 @@ function captureFilters() {
   return obj;
 }
 
+async function fetchListOptions(media) {
+  const pths = media === "tv"
+    ? { profiles: "/sonarr/quality-profiles", folders: "/sonarr/root-folders" }
+    : { profiles: "/radarr/quality-profiles", folders: "/radarr/root-folders" };
+  const [profiles, folders] = await Promise.all([api(pths.profiles), api(pths.folders)]);
+  return { profiles, folders };
+}
+
+// Shared modal renderer for create + edit.
+function fillListModal({ media, filters, profiles, folders, values, isEdit }) {
+  state.listModalMedia = media;
+  state.pendingListFilters = filters;
+  state.listModalProfiles = profiles;
+  state.listModalFolders = folders;
+  const tv = media === "tv";
+  $("#list-modal-title") && ($("#list-modal-title").textContent = "");
+  $("#list-summary").textContent =
+    `${tv ? "Séries (Sonarr)" : "Films (Radarr)"} · ${describeFilters(filters) || "aucun filtre (tout)"}`;
+  $("#list-profile").innerHTML = profiles.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+  $("#list-folder").innerHTML = folders.map((f) => `<option value="${f.path}">${f.path}</option>`).join("");
+  if (values.quality_profile_id) $("#list-profile").value = values.quality_profile_id;
+  if (values.root_folder) $("#list-folder").value = values.root_folder;
+  $("#list-availability-row").hidden = tv;
+  if (values.minimum_availability) $("#list-availability").value = values.minimum_availability;
+  $("#list-name").value = values.name || "";
+  $("#list-monitor").checked = values.monitor !== false;
+  $("#list-searchnow").checked = values.search_on_add !== false;
+  $("#list-maxpages").value = values.max_pages || 3;
+  $("#list-save").textContent = isEdit ? "Mettre à jour" : "Enregistrer la liste";
+  $("#list-modal").classList.remove("hidden");
+}
+
 function openCreateList() {
   if (!state.profiles.length) {
     toast(`Options ${libName()} indisponibles`, false);
     return;
   }
-  state.pendingListFilters = captureFilters();
-  $("#list-summary").textContent =
-    `${isTv() ? "Séries (Sonarr)" : "Films (Radarr)"} · ${describeFilters(state.pendingListFilters) || "aucun filtre (tout)"}`;
-  $("#list-profile").innerHTML = state.profiles.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
-  $("#list-folder").innerHTML = state.folders.map((f) => `<option value="${f.path}">${f.path}</option>`).join("");
+  state.editingListId = null;
   const d = libDefaults();
-  if (d.quality_profile_id) $("#list-profile").value = d.quality_profile_id;
-  if (d.root_folder) $("#list-folder").value = d.root_folder;
-  $("#list-availability-row").hidden = isTv();
-  $("#list-name").value = "";
-  $("#list-monitor").checked = true;
-  $("#list-searchnow").checked = true;
-  $("#list-maxpages").value = 3;
-  $("#list-modal").classList.remove("hidden");
+  fillListModal({
+    media: state.media,
+    filters: captureFilters(),
+    profiles: state.profiles,
+    folders: state.folders,
+    values: {
+      quality_profile_id: d.quality_profile_id, root_folder: d.root_folder,
+      minimum_availability: d.minimum_availability, monitor: true, search_on_add: true, max_pages: 3,
+    },
+    isEdit: false,
+  });
+}
+
+async function openEditList(l) {
+  state.editingListId = l.id;
+  try {
+    const { profiles, folders } = await fetchListOptions(l.media);
+    fillListModal({
+      media: l.media,
+      filters: l.filters || {},
+      profiles, folders,
+      values: {
+        name: l.name, quality_profile_id: l.quality_profile_id, root_folder: l.root_folder,
+        minimum_availability: l.minimum_availability, monitor: l.monitor,
+        search_on_add: l.search_on_add, max_pages: l.max_pages,
+      },
+      isEdit: true,
+    });
+  } catch (e) {
+    toast("Impossible de charger les options : " + e.message, false);
+  }
 }
 
 async function saveList() {
   const name = $("#list-name").value.trim();
   if (!name) { toast("Donnez un nom à la liste", false); return; }
+  const tv = state.listModalMedia === "tv";
   const body = {
     name,
-    media: state.media,
+    media: state.listModalMedia,
     filters: state.pendingListFilters,
     quality_profile_id: Number($("#list-profile").value) || null,
     root_folder: $("#list-folder").value || null,
@@ -1164,21 +1221,67 @@ async function saveList() {
     search_on_add: $("#list-searchnow").checked,
     max_pages: Number($("#list-maxpages").value) || 3,
   };
-  if (!isTv()) body.minimum_availability = $("#list-availability").value;
+  if (!tv) body.minimum_availability = $("#list-availability").value;
+  const editing = state.editingListId;
   const btn = $("#list-save");
-  btn.disabled = true; btn.textContent = "Enregistrement…";
+  btn.disabled = true; btn.textContent = editing ? "Mise à jour…" : "Enregistrement…";
   try {
-    await api("/lists", {
-      method: "POST",
+    await api(editing ? `/lists/${editing}` : "/lists", {
+      method: editing ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    toast(`Liste « ${name} » créée ✓`);
+    toast(editing ? `Liste « ${name} » mise à jour ✓` : `Liste « ${name} » créée ✓`);
     $("#list-modal").classList.add("hidden");
+    if (!$("#lists-modal").classList.contains("hidden")) renderLists(await api("/lists"));
   } catch (e) {
     toast("Échec : " + e.message, false);
   } finally {
-    btn.disabled = false; btn.textContent = "Enregistrer la liste";
+    btn.disabled = false; btn.textContent = editing ? "Mettre à jour" : "Enregistrer la liste";
+  }
+}
+
+async function previewList(media, filters, maxPages, label) {
+  const m = $("#preview-modal");
+  m.classList.remove("hidden");
+  $("#preview-title").textContent = "👁 Aperçu — " + (label || "");
+  $("#preview-summary").textContent = "Analyse en cours…";
+  $("#preview-grid").innerHTML = "";
+  try {
+    const d = await api("/lists/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media, filters, max_pages: maxPages }),
+    });
+    const tv = media === "tv";
+    $("#preview-summary").textContent =
+      `${d.scanned} média(s) analysés · ${d.new} nouveau(x) à ajouter · ${d.owned} déjà présent(s)` +
+      (d.total_results ? ` (≈ ${d.total_results} au total côté TMDB)` : "");
+    const grid = $("#preview-grid");
+    grid.innerHTML = "";
+    if (!d.results.length) {
+      grid.innerHTML = "<p class='muted'>Aucun média ne correspond à ces filtres.</p>";
+      return;
+    }
+    d.results.forEach((it) => {
+      const card = el("div", "card");
+      const img = el("img", "poster");
+      img.src = it.poster_path ? `${state.imageBase}/w342${it.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
+      img.loading = "lazy";
+      card.appendChild(img);
+      const body = el("div", "body");
+      body.appendChild(el("div", "title", it.title || it.name));
+      const meta = el("div", "meta");
+      meta.appendChild(el("span", null, (it.release_date || it.first_air_date || "").slice(0, 4) || "—"));
+      meta.appendChild(el("span", "rating", `★ ${(it.vote_average || 0).toFixed(1)}`));
+      body.appendChild(meta);
+      const owned = tv ? it.in_sonarr : it.in_radarr;
+      body.appendChild(el("div", owned ? "badge-in" : "badge-new", owned ? "✓ Déjà présent" : "＋ Nouveau"));
+      card.appendChild(body);
+      grid.appendChild(card);
+    });
+  } catch (e) {
+    $("#preview-summary").textContent = "Erreur : " + e.message;
   }
 }
 
@@ -1226,11 +1329,15 @@ function renderLists(lists) {
     const actions = el("div", "lc-actions");
     const run = el("button", "primary", "▶ Lancer maintenant");
     run.onclick = () => runListNow(l.id, run);
+    const prev = el("button", null, "👁 Aperçu");
+    prev.onclick = () => previewList(l.media, l.filters, l.max_pages, l.name);
+    const edit = el("button", null, "✏️ Modifier");
+    edit.onclick = () => openEditList(l);
     const toggle = el("button", null, l.enabled ? "⏸ Mettre en pause" : "▶ Activer");
     toggle.onclick = () => toggleList(l);
     const del = el("button", null, "🗑 Supprimer");
     del.onclick = () => deleteList(l.id);
-    actions.append(run, toggle, del);
+    actions.append(run, prev, edit, toggle, del);
     card.appendChild(actions);
     box.appendChild(card);
   });
@@ -1379,7 +1486,14 @@ function bindUI() {
   $("#btn-create-list").onclick = openCreateList;
   $("#btn-manage-lists").onclick = openLists;
   $("#list-save").onclick = saveList;
+  $("#list-preview").onclick = () =>
+    previewList(state.listModalMedia, state.pendingListFilters,
+      Number($("#list-maxpages").value) || 3, $("#list-name").value.trim() || "nouvelle liste");
   $("#list-cancel").onclick = () => $("#list-modal").classList.add("hidden");
+  $("#preview-close").onclick = () => $("#preview-modal").classList.add("hidden");
+  $("#preview-modal").addEventListener("click", (e) => {
+    if (e.target.id === "preview-modal") $("#preview-modal").classList.add("hidden");
+  });
   $("#list-modal").addEventListener("click", (e) => {
     if (e.target.id === "list-modal") $("#list-modal").classList.add("hidden");
   });

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=13" />
+  <link rel="stylesheet" href="/style.css?v=14" />
 </head>
 <body>
   <header>
@@ -239,7 +239,20 @@
       <label class="checkbox"><input type="checkbox" id="list-searchnow" checked /> Lancer la recherche à l'ajout</label>
       <div class="actions">
         <button id="list-save" class="primary">Enregistrer la liste</button>
+        <button id="list-preview">👁 Aperçu</button>
         <button id="list-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview modal -->
+  <div id="preview-modal" class="modal hidden">
+    <div class="detail-content">
+      <button id="preview-close" class="detail-close" aria-label="Fermer">✕</button>
+      <div class="lists-wrap">
+        <h2 id="preview-title">👁 Aperçu</h2>
+        <div id="preview-summary" class="muted"></div>
+        <div id="preview-grid" class="grid"></div>
       </div>
     </div>
   </div>
@@ -273,6 +286,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=13"></script>
+  <script src="/app.js?v=14"></script>
 </body>
 </html>

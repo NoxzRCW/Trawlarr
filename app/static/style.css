@@ -161,6 +161,7 @@ main { flex: 1; padding: 18px; }
 .card button { width: 100%; }
 .card .detail-btn { background: var(--panel-2); color: var(--text); }
 .badge-in { font-size: 11px; color: var(--ok); text-align: center; padding: 8px; }
+.badge-new { font-size: 11px; color: var(--accent); font-weight: 600; text-align: center; padding: 8px; }
 
 .pagination { display: flex; justify-content: center; align-items: center; gap: 12px; margin: 24px 0; }
 
@@ -320,6 +321,8 @@ main { flex: 1; padding: 18px; }
 }
 
 /* ---- Lists manager ---- */
+/* These open on top of the lists manager modal, so stack them higher. */
+#list-modal, #preview-modal { z-index: 70; }
 .lists-wrap { padding: 24px; }
 .lists-wrap h2 { margin: 0 0 4px; }
 .list-card {
