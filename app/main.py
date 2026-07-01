@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -36,6 +37,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_title, lifespan=lifespan)
+# Compresse les réponses JSON/statiques : pages de résultats plus rapides.
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
