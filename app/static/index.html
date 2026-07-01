@@ -3,13 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Radarr Media Search</title>
-  <link rel="stylesheet" href="/style.css?v=21" />
+  <title>Media Search</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css?v=22" />
 </head>
 <body>
   <header>
-    <button id="filter-toggle" class="filter-toggle" aria-label="Afficher/masquer les filtres">☰</button>
-    <h1>🎬 Media Search</h1>
+    <button id="filter-toggle" class="filter-toggle" aria-label="Afficher/masquer les filtres">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+    </button>
+    <h1><span class="mark">✦</span>Media <em>Search</em></h1>
     <div id="health" class="health"></div>
   </header>
 
@@ -17,8 +22,8 @@
     <!-- ===================== Filters sidebar ===================== -->
     <aside id="filters" class="filters">
       <div class="media-switch">
-        <button class="media-btn active" data-media="movie">🎬 Films</button>
-        <button class="media-btn" data-media="tv">📺 Séries</button>
+        <button class="media-btn active" data-media="movie">Films</button>
+        <button class="media-btn" data-media="tv">Séries</button>
       </div>
       <div class="tabs">
         <button class="tab active" data-mode="discover">Filtres avancés</button>
@@ -53,7 +58,7 @@
         <fieldset>
           <legend>Genres</legend>
           <div id="f-genres" class="chips"></div>
-          <small>Tapez pour cycler : <span style="color:var(--accent-2)">inclure</span> → <span style="color:var(--danger)">exclure</span> → aucun · (Maj+clic = exclure sur PC)</small>
+          <small>Tapez pour cycler : <span class="accent-inc">inclure</span> → <span class="accent-exc">exclure</span> → aucun · (Maj+clic = exclure sur PC)</small>
         </fieldset>
 
         <fieldset id="fs-dates">
@@ -152,8 +157,8 @@
         <button id="btn-reset">Réinitialiser</button>
       </div>
       <div class="actions">
-        <button id="btn-create-list">💾 Créer une liste auto</button>
-        <button id="btn-manage-lists">📋 Mes listes</button>
+        <button id="btn-create-list">Créer une liste auto</button>
+        <button id="btn-manage-lists">Mes listes</button>
       </div>
     </aside>
 
@@ -220,7 +225,7 @@
   <!-- Create auto-list modal -->
   <div id="list-modal" class="modal hidden">
     <div class="modal-content">
-      <h3>💾 Créer une liste automatique</h3>
+      <h3>Créer une liste automatique</h3>
       <div id="list-summary" class="muted"></div>
       <label>Nom de la liste <input type="text" id="list-name" placeholder="ex: Horreur années 80" /></label>
       <label>Profil de qualité <select id="list-profile"></select></label>
@@ -239,7 +244,7 @@
       <label class="checkbox"><input type="checkbox" id="list-searchnow" checked /> Lancer la recherche à l'ajout</label>
       <div class="actions">
         <button id="list-save" class="primary">Enregistrer la liste</button>
-        <button id="list-preview">👁 Aperçu</button>
+        <button id="list-preview">Aperçu</button>
         <button id="list-cancel">Annuler</button>
       </div>
     </div>
@@ -250,7 +255,7 @@
     <div class="detail-content">
       <button id="preview-close" class="detail-close" aria-label="Fermer">✕</button>
       <div class="lists-wrap">
-        <h2 id="preview-title">👁 Aperçu</h2>
+        <h2 id="preview-title">Aperçu</h2>
         <div id="preview-summary" class="muted"></div>
         <div id="preview-grid" class="grid"></div>
       </div>
@@ -262,7 +267,7 @@
     <div class="detail-content">
       <button id="lists-close" class="detail-close" aria-label="Fermer">✕</button>
       <div class="lists-wrap">
-        <h2>📋 Mes listes automatiques</h2>
+        <h2>Mes listes automatiques</h2>
         <p class="muted">Rescannées toutes les 12h (et au démarrage). Les nouveaux médias correspondant aux filtres sont ajoutés automatiquement à Radarr (films) ou Sonarr (séries).</p>
         <div id="lists-body"></div>
       </div>
@@ -274,28 +279,34 @@
     <div class="modal-content">
       <button id="summary-close" class="detail-close" aria-label="Fermer">✕</button>
       <h3 id="summary-title">Résumé</h3>
-      <div id="summary-orb" class="summary-orb">🔊</div>
+      <div id="summary-orb" class="summary-orb">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+      </div>
       <div id="summary-text" class="summary-text"></div>
       <label class="summary-voice-row">Voix
         <select id="summary-voice"></select>
       </label>
       <div class="actions">
-        <button id="summary-replay">🔊 Réécouter</button>
-        <button id="summary-stop">⏹ Stop</button>
+        <button id="summary-replay">Réécouter</button>
+        <button id="summary-stop">Stop</button>
       </div>
     </div>
   </div>
 
   <!-- Voice assistant (Mistral AI) -->
-  <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">🎙️</button>
+  <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21.5"/></svg>
+  </button>
   <div id="assistant-overlay" class="modal hidden">
     <div class="assistant-card">
       <button id="assistant-close" class="detail-close" aria-label="Fermer">✕</button>
-      <div id="assistant-orb" class="assistant-orb">🎙️</div>
+      <div id="assistant-orb" class="assistant-orb">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21.5"/></svg>
+      </div>
       <div id="assistant-status" class="assistant-status">Appuyez sur le micro et parlez…</div>
       <div id="assistant-transcript" class="assistant-transcript"></div>
       <div class="assistant-controls">
-        <button id="assistant-talk" class="primary">🎤 Parler</button>
+        <button id="assistant-talk" class="primary">Parler</button>
       </div>
       <input id="assistant-text" type="text" placeholder="…ou tapez votre demande puis Entrée" />
       <div id="assistant-reply" class="assistant-reply"></div>
@@ -303,6 +314,6 @@
     </div>
   </div>
 
-  <script src="/app.js?v=21"></script>
+  <script src="/app.js?v=22"></script>
 </body>
 </html>

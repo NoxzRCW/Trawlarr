@@ -32,9 +32,10 @@ const state = {
   listModalMedia: "movie",
   listModalProfiles: [],
   listModalFolders: [],
-  hideOwned: false,
+  // Préférences persistées entre les sessions.
+  hideOwned: (typeof localStorage !== "undefined" && localStorage.getItem("hideOwned") === "1"),
   ttsVoiceURI: (typeof localStorage !== "undefined" && localStorage.getItem("ttsVoice")) || null,
-  pageSize: 20,
+  pageSize: (typeof localStorage !== "undefined" && Number(localStorage.getItem("pageSize"))) || 20,
   selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
   currentResults: [],    // movies shown on the current page
 };
@@ -50,7 +51,42 @@ const el = (tag, cls, txt) => {
 function toast(msg, ok = true) {
   const t = el("div", `toast ${ok ? "ok" : "err"}`, msg);
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3500);
+  // Sortie animée avant suppression du DOM.
+  setTimeout(() => {
+    t.classList.add("out");
+    setTimeout(() => t.remove(), 450);
+  }, 3200);
+}
+
+// Carte d'affiche : image avec fondu au chargement, ou monogramme serif
+// élégant quand l'affiche est manquante.
+function posterEl(m) {
+  if (m.poster_path) {
+    const img = el("img", "poster");
+    img.loading = "lazy";
+    img.onload = () => img.classList.add("loaded");
+    img.src = `${state.imageBase}/w342${m.poster_path}`;
+    if (img.complete) img.classList.add("loaded");
+    return img;
+  }
+  const ph = el("div", "poster poster-ph", (m.title || m.name || "?").trim().charAt(0).toUpperCase());
+  return ph;
+}
+
+// Skeletons scintillants pendant le chargement des résultats.
+function renderSkeletons(n) {
+  const grid = $("#results");
+  grid.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const c = el("div", "skel-card");
+    c.style.setProperty("--i", Math.min(i, 12));
+    c.appendChild(el("div", "skel sk-poster"));
+    const b = el("div", "sk-body");
+    b.appendChild(el("div", "skel sk-line w70"));
+    b.appendChild(el("div", "skel sk-line w40"));
+    c.appendChild(b);
+    grid.appendChild(c);
+  }
 }
 
 // ----------------------- media helpers -----------------------
@@ -298,7 +334,7 @@ function newSearch() {
 
 async function search() {
   $("#status").textContent = "Recherche…";
-  $("#results").innerHTML = "";
+  renderSkeletons(Math.min(state.pageSize, 10));
   try {
     let data;
     if (state.mode === "search") {
@@ -338,13 +374,12 @@ function renderResults(movies) {
     updateSelectionBar();
     return;
   }
-  movies.forEach((m) => {
+  movies.forEach((m, i) => {
     const card = el("div", "card");
+    // Apparition en cascade, plafonnée pour ne pas retarder le bas de page.
+    card.style.setProperty("--i", Math.min(i, 14));
     if (state.selected.has(m.id)) card.classList.add("selected");
-    const img = el("img", "poster");
-    img.src = m.poster_path ? `${state.imageBase}/w342${m.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
-    img.loading = "lazy";
-    card.appendChild(img);
+    card.appendChild(posterEl(m));
 
     // Selection checkbox (only for items not already in the library).
     if (!isOwned(m)) {
@@ -369,12 +404,12 @@ function renderResults(movies) {
     body.appendChild(meta);
     body.appendChild(el("div", "overview", m.overview || "Pas de description."));
 
-    const detailBtn = el("button", "detail-btn", "ⓘ Détails");
+    const detailBtn = el("button", "detail-btn", "Détails");
     detailBtn.onclick = () => openDetails(m);
     body.appendChild(detailBtn);
 
     if (state.config.integrations && state.config.integrations.mistral) {
-      const sumBtn = el("button", "summary-btn", "🔊 Résumé");
+      const sumBtn = el("button", "summary-btn", "Résumé audio");
       sumBtn.onclick = () => summarizeMedia(m);
       body.appendChild(sumBtn);
     }
@@ -1158,7 +1193,7 @@ function renderAssistantTitles(plan) {
 function showAssistantBanner(text) {
   const b = $("#assistant-banner");
   b.innerHTML = "";
-  b.appendChild(el("span", null, "✨ " + (text || "Résultats proposés par l'IA")));
+  b.appendChild(el("span", null, "✦ " + (text || "Résultats proposés par l'IA")));
   const x = el("button", null, "✕ Effacer");
   x.onclick = () => b.classList.add("hidden");
   b.appendChild(x);
@@ -1310,7 +1345,7 @@ async function saveList() {
 async function previewList(media, filters, maxPages, label) {
   const m = $("#preview-modal");
   m.classList.remove("hidden");
-  $("#preview-title").textContent = "👁 Aperçu — " + (label || "");
+  $("#preview-title").textContent = "Aperçu — " + (label || "");
   $("#preview-summary").textContent = "Analyse en cours…";
   $("#preview-grid").innerHTML = "";
   try {
@@ -1329,12 +1364,10 @@ async function previewList(media, filters, maxPages, label) {
       grid.innerHTML = "<p class='muted'>Aucun média ne correspond à ces filtres.</p>";
       return;
     }
-    d.results.forEach((it) => {
+    d.results.forEach((it, i) => {
       const card = el("div", "card");
-      const img = el("img", "poster");
-      img.src = it.poster_path ? `${state.imageBase}/w342${it.poster_path}` : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E";
-      img.loading = "lazy";
-      card.appendChild(img);
+      card.style.setProperty("--i", Math.min(i, 14));
+      card.appendChild(posterEl(it));
       const body = el("div", "body");
       body.appendChild(el("div", "title", it.title || it.name));
       const meta = el("div", "meta");
@@ -1342,7 +1375,7 @@ async function previewList(media, filters, maxPages, label) {
       meta.appendChild(el("span", "rating", `★ ${(it.vote_average || 0).toFixed(1)}`));
       body.appendChild(meta);
       const owned = tv ? it.in_sonarr : it.in_radarr;
-      body.appendChild(el("div", owned ? "badge-in" : "badge-new", owned ? "✓ Déjà présent" : "＋ Nouveau"));
+      body.appendChild(el("div", owned ? "badge-in" : "badge-new", owned ? "✓ Déjà présent" : "Nouveau"));
       card.appendChild(body);
       grid.appendChild(card);
     });
@@ -1365,14 +1398,14 @@ function renderLists(lists) {
   const box = $("#lists-body");
   box.innerHTML = "";
   if (!lists.length) {
-    box.innerHTML = "<p class='muted'>Aucune liste pour le moment. Réglez des filtres puis « 💾 Créer une liste auto ».</p>";
+    box.innerHTML = "<p class='muted'>Aucune liste pour le moment. Réglez des filtres puis « Créer une liste auto ».</p>";
     return;
   }
   lists.forEach((l) => {
     const card = el("div", "list-card");
     const head = el("div", "lc-head");
     head.appendChild(el("span", "lc-name", l.name));
-    head.appendChild(el("span", "list-badge", l.media === "tv" ? "📺 Séries" : "🎬 Films"));
+    head.appendChild(el("span", "list-badge", l.media === "tv" ? "Séries" : "Films"));
     head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? "Active" : "En pause"));
     card.appendChild(head);
 
@@ -1393,15 +1426,15 @@ function renderLists(lists) {
     }
 
     const actions = el("div", "lc-actions");
-    const run = el("button", "primary", "▶ Lancer maintenant");
+    const run = el("button", "primary", "Lancer maintenant");
     run.onclick = () => runListNow(l.id, run);
-    const prev = el("button", null, "👁 Aperçu");
+    const prev = el("button", null, "Aperçu");
     prev.onclick = () => previewList(l.media, l.filters, l.max_pages, l.name);
-    const edit = el("button", null, "✏️ Modifier");
+    const edit = el("button", null, "Modifier");
     edit.onclick = () => openEditList(l);
-    const toggle = el("button", null, l.enabled ? "⏸ Mettre en pause" : "▶ Activer");
+    const toggle = el("button", null, l.enabled ? "Mettre en pause" : "Activer");
     toggle.onclick = () => toggleList(l);
-    const del = el("button", null, "🗑 Supprimer");
+    const del = el("button", null, "Supprimer");
     del.onclick = () => deleteList(l.id);
     actions.append(run, prev, edit, toggle, del);
     card.appendChild(actions);
@@ -1417,7 +1450,7 @@ async function runListNow(id, btn) {
     renderLists(await api("/lists"));
   } catch (e) {
     toast("Échec : " + e.message, false);
-    if (btn) { btn.disabled = false; btn.textContent = "▶ Lancer maintenant"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Lancer maintenant"; }
   }
 }
 
@@ -1541,13 +1574,21 @@ function bindUI() {
     };
   });
 
+  // Restaure les préférences persistées dans les contrôles.
+  $("#hide-owned").checked = state.hideOwned;
+  if ([...$("#page-size").options].some((o) => o.value === String(state.pageSize))) {
+    $("#page-size").value = String(state.pageSize);
+  }
+
   $("#hide-owned").onchange = (e) => {
     state.hideOwned = e.target.checked;
+    try { localStorage.setItem("hideOwned", state.hideOwned ? "1" : "0"); } catch (err) {}
     newSearch();
   };
 
   $("#page-size").onchange = (e) => {
     state.pageSize = Number(e.target.value) || 20;
+    try { localStorage.setItem("pageSize", String(state.pageSize)); } catch (err) {}
     newSearch();
   };
 
@@ -1564,6 +1605,7 @@ function bindUI() {
   $("#btn-search").onclick = newSearch;
   $("#btn-reset").onclick = resetFilters;
   $("#q-text").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
+  $("#q-year").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
 
   $("#modal-add").onclick = confirmAdd;
   $("#modal-cancel").onclick = () => $("#modal").classList.add("hidden");
