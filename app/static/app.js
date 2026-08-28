@@ -356,7 +356,7 @@ async function search() {
     const noun = isTv() ? tr("TV shows") : tr("movies");
     const owned = isTv() ? tr("owned shows") : tr("owned movies");
     const count = state.hideOwned
-      ? `${state.totalResults} ${noun} total (${owned} hidden)`
+      ? `${state.totalResults.toLocaleString(uiLocale())} ${noun} total (${owned} hidden)`
       : `${state.totalResults} ${noun}`;
     $("#status").textContent = `${count} · page ${state.viewPage}`;
     renderPagination();
@@ -379,7 +379,12 @@ function renderResults(movies) {
     // Staggered reveal, capped so the bottom of the page is not held back.
     card.style.setProperty("--i", Math.min(i, 14));
     if (state.selected.has(m.id)) card.classList.add("selected");
-    card.appendChild(posterEl(m));
+
+    // The poster and the actions that appear over it on hover share one box,
+    // so the actions can be pinned to the artwork rather than to the card.
+    const art = el("div", "poster-wrap");
+    art.appendChild(posterEl(m));
+    card.appendChild(art);
 
     // Selection checkbox (only for items not already in the library).
     if (!isOwned(m)) {
@@ -394,6 +399,8 @@ function renderResults(movies) {
       };
       card.appendChild(box);
     }
+    const acts = el("div", "card-actions");
+    art.appendChild(acts);
 
     const body = el("div", "body");
     body.appendChild(el("div", "title", m.title || m.name));
@@ -406,12 +413,12 @@ function renderResults(movies) {
 
     const detailBtn = el("button", "detail-btn", tr("Details"));
     detailBtn.onclick = () => openDetails(m);
-    body.appendChild(detailBtn);
+    acts.appendChild(detailBtn);
 
     if (state.config.integrations && state.config.integrations.mistral) {
       const sumBtn = el("button", "summary-btn", tr("Audio summary"));
       sumBtn.onclick = () => summarizeMedia(m);
-      body.appendChild(sumBtn);
+      acts.appendChild(sumBtn);
     }
 
     if (isOwned(m)) {
@@ -419,7 +426,7 @@ function renderResults(movies) {
     } else {
       const btn = el("button", "primary", "+ " + tr("Add"));
       btn.onclick = () => openModal(m);
-      body.appendChild(btn);
+      acts.appendChild(btn);
     }
     card.appendChild(body);
     grid.appendChild(card);
@@ -692,7 +699,7 @@ function renderDetails(d, tv) {
 
   // Synopsis
   if (d.overview) {
-    const s = detailSection("Synopsis");
+    const s = detailSection(tr("Overview"));
     s.appendChild(el("p", "overview-text", d.overview));
     inner.appendChild(s);
   }
@@ -703,26 +710,26 @@ function renderDetails(d, tv) {
   if (tv) {
     addF(tr("First air date"), fmtDate(d.first_air_date));
     addF(tr("Last air date"), fmtDate(d.last_air_date));
-    addF("En production", fmtBool(d.in_production));
-    addF("Type", d.type);
+    addF(tr("In production"), fmtBool(d.in_production));
+    addF(tr("Type"), d.type);
     addF(tr("Episode runtime"), (d.episode_run_time || []).map((x) => `${x} min`).join(", "));
     addF(tr("Networks"), (d.networks || []).map((n) => n.name));
     addF(tr("Created by"), (d.created_by || []).map((c) => c.name));
     addF(tr("Origin country"), d.origin_country);
   } else {
-    addF("Date de sortie", fmtDate(d.release_date));
-    addF("Budget", fmtMoney(d.budget));
-    addF("Recettes", fmtMoney(d.revenue));
+    addF(tr("Release date"), fmtDate(d.release_date));
+    addF(tr("Budget"), fmtMoney(d.budget));
+    addF(tr("Revenue"), fmtMoney(d.revenue));
     addF(tr("Production countries"), (d.production_countries || []).map((c) => c.name));
-    if (d.belongs_to_collection) addF("Collection", d.belongs_to_collection.name);
+    if (d.belongs_to_collection) addF(tr("Collection"), d.belongs_to_collection.name);
   }
-  addF("Statut", d.status);
+  addF(tr("Status"), d.status);
   addF(tr("Original language"), (d.original_language || "").toUpperCase());
   addF(tr("Spoken languages"), (d.spoken_languages || []).map((l) => l.english_name || l.name));
   addF(tr("Popularity"), d.popularity ? Math.round(d.popularity) : null);
   addF(tr("TMDB rating"), `${(d.vote_average || 0).toFixed(2)} / 10`);
   if (facts.children.length) {
-    const s = detailSection("Informations");
+    const s = detailSection(tr("Details"));
     s.appendChild(facts);
     inner.appendChild(s);
   }
@@ -749,7 +756,7 @@ function renderDetails(d, tv) {
   // Cast
   const cast = (tv ? (d.aggregate_credits?.cast || d.credits?.cast) : d.credits?.cast) || [];
   if (cast.length) {
-    const s = detailSection(`Distribution (${cast.length})`);
+    const s = detailSection(`${tr("Cast")} (${cast.length})`);
     const row = el("div", "people-row");
     cast.slice(0, 30).forEach((c) => {
       const person = el("div", "person");
@@ -854,7 +861,7 @@ function renderDetails(d, tv) {
   // External links
   const links = externalLinks(d, tv);
   if (links.length) {
-    const s = detailSection("Liens externes");
+    const s = detailSection(tr("External links"));
     const list = el("div", "link-list");
     links.forEach(([label, href]) => {
       const a = el("a", null, label); a.href = href; a.target = "_blank"; a.rel = "noopener";
@@ -867,7 +874,7 @@ function renderDetails(d, tv) {
   // Reviews
   const reviews = d.reviews?.results || [];
   if (reviews.length) {
-    const s = detailSection(`Avis (${reviews.length})`);
+    const s = detailSection(`${tr("Reviews")} (${reviews.length})`);
     reviews.slice(0, 5).forEach((r) => {
       const rv = el("div", "review");
       const rating = r.author_details && r.author_details.rating ? ` — ★ ${r.author_details.rating}/10` : "";
@@ -887,7 +894,7 @@ function renderDetails(d, tv) {
   if (d.images) {
     const b = (d.images.backdrops || []).length, p = (d.images.posters || []).length, l = (d.images.logos || []).length;
     if (b || p || l) {
-      const s = detailSection("Galerie d'images");
+      const s = detailSection(tr("Gallery"));
       s.appendChild(el("p", "overview-text", `${b} ${tr("backdrops")}, ${p} ${tr("posters")}, ${l} ${tr("logos")}.`));
       const row = el("div", "poster-row");
       (d.images.backdrops || []).slice(0, 10).forEach((img) => {
@@ -1546,8 +1553,30 @@ function setupMobileFilters() {
     if (filters.classList.contains("open")) close(); else open();
   };
   backdrop.onclick = close;
-  // Expose for closing the drawer after launching a search on mobile.
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   state.closeFilters = close;
+
+  // The media switch belongs in the top bar, not buried in the drawer.
+  const media = filters.querySelector(".media-switch");
+  const header = document.querySelector("header");
+  if (media && header) header.insertBefore(media, header.querySelector(".health"));
+
+  updateFilterCount();
+}
+
+// Badge on the Filters button: how many filters are actually narrowing the search.
+function updateFilterCount() {
+  const toggle = $("#filter-toggle");
+  if (!toggle) return;
+  let n = 0;
+  document.querySelectorAll("#panel-discover input, #panel-discover select").forEach((f) => {
+    if (f.type === "checkbox") { if (f.checked) n++; }
+    else if (f.id !== "f-sort" && f.value && f.value.trim()) n++;
+  });
+  n += document.querySelectorAll("#f-genres .chip.include, #f-genres .chip.exclude").length;
+  n += document.querySelectorAll("#f-providers .chip.include").length;
+  n += document.querySelectorAll(".chips.selected .chip").length;
+  toggle.dataset.count = String(n);
 }
 
 async function switchMedia(media) {
@@ -1607,8 +1636,8 @@ function bindUI() {
   };
   $("#add-selection").onclick = openBulkModal;
 
-  $("#btn-search").onclick = newSearch;
-  $("#btn-reset").onclick = resetFilters;
+  $("#btn-search").onclick = () => { updateFilterCount(); newSearch(); };
+  $("#btn-reset").onclick = () => { resetFilters(); updateFilterCount(); };
   $("#q-text").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
   $("#q-year").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
 
