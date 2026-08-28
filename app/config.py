@@ -9,8 +9,8 @@ class Settings(BaseSettings):
 
     # TMDB
     tmdb_api_key: str = ""
-    tmdb_language: str = "fr-FR"
-    tmdb_region: str = "FR"
+    tmdb_language: str = "en-US"
+    tmdb_region: str = "US"
 
     # Radarr
     radarr_url: str = "http://localhost:7878"
@@ -38,13 +38,15 @@ class Settings(BaseSettings):
     # Mistral AI (voice / natural-language assistant)
     mistral_api_key: str = ""
     mistral_model: str = "mistral-large-latest"
+    # Language the assistant answers in. Empty = derive it from TMDB_LANGUAGE.
+    assistant_language: str = ""
 
     # Auto-lists (smart lists scanned periodically)
     data_dir: str = "/data"            # persisted volume for lists.json
     list_refresh_hours: int = 12       # how often each list is rescanned
     list_max_pages: int = 3            # default TMDB pages scanned per run (~20/page)
 
-    app_title: str = "Media Search"
+    app_title: str = "Trawlarr"
 
     @field_validator(
         "radarr_quality_profile_id",
@@ -61,3 +63,20 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+_LANGUAGE_NAMES = {
+    "en": "English", "fr": "French", "de": "German", "es": "Spanish",
+    "it": "Italian", "pt": "Portuguese", "nl": "Dutch", "pl": "Polish",
+    "ru": "Russian", "ja": "Japanese", "ko": "Korean", "zh": "Chinese",
+    "sv": "Swedish", "da": "Danish", "no": "Norwegian", "fi": "Finnish",
+    "cs": "Czech", "tr": "Turkish", "uk": "Ukrainian", "he": "Hebrew",
+}
+
+
+def assistant_language() -> str:
+    """Human-readable language the AI assistant must answer in."""
+    if settings.assistant_language:
+        return settings.assistant_language
+    code = (settings.tmdb_language or "en-US").split("-")[0].lower()
+    return _LANGUAGE_NAMES.get(code, "English")

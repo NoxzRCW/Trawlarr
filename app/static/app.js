@@ -13,7 +13,7 @@ const state = {
   mode: "discover",
   cursor: 0,          // absolute item index where the current page starts
   viewPage: 1,        // page number shown to the user
-  cursorStack: [],    // history of start cursors, for the "Précédent" button
+  cursorStack: [],    // history of start cursors, for the "Previous" button
   nextCursor: 0,      // cursor for the next page, returned by the backend
   hasMore: false,
   totalResults: 0,
@@ -32,7 +32,7 @@ const state = {
   listModalMedia: "movie",
   listModalProfiles: [],
   listModalFolders: [],
-  // Préférences persistées entre les sessions.
+  // Preferences persisted between sessions.
   hideOwned: (typeof localStorage !== "undefined" && localStorage.getItem("hideOwned") === "1"),
   ttsVoiceURI: (typeof localStorage !== "undefined" && localStorage.getItem("ttsVoice")) || null,
   pageSize: (typeof localStorage !== "undefined" && Number(localStorage.getItem("pageSize"))) || 20,
@@ -51,7 +51,7 @@ const el = (tag, cls, txt) => {
 function toast(msg, ok = true) {
   const t = el("div", `toast ${ok ? "ok" : "err"}`, msg);
   document.body.appendChild(t);
-  // Sortie animée avant suppression du DOM.
+  // Animate out before removing from the DOM.
   setTimeout(() => {
     t.classList.add("out");
     setTimeout(() => t.remove(), 450);
@@ -59,7 +59,7 @@ function toast(msg, ok = true) {
 }
 
 // Carte d'affiche : image avec fondu au chargement, ou monogramme serif
-// élégant quand l'affiche est manquante.
+// elegant fallback when the poster is missing.
 function posterEl(m) {
   if (m.poster_path) {
     const img = el("img", "poster");
@@ -73,7 +73,7 @@ function posterEl(m) {
   return ph;
 }
 
-// Skeletons scintillants pendant le chargement des résultats.
+// Shimmering skeletons while results load.
 function renderSkeletons(n) {
   const grid = $("#results");
   grid.innerHTML = "";
@@ -108,27 +108,27 @@ const libDefaults = () => (isTv() ? state.config.sonarr_defaults : state.config.
 function applyMediaUI() {
   $("#fs-people").classList.toggle("hidden", isTv());
   $("#fs-cert").classList.toggle("hidden", isTv());
-  $("#fs-dates-legend").textContent = isTv() ? "Première diffusion" : "Dates de sortie";
+  $("#fs-dates-legend").textContent = isTv() ? tr("First air date") : tr("Release dates");
   const sort = $("#f-sort");
   const movieSort = [
-    ["popularity.desc", "Popularité ↓"], ["popularity.asc", "Popularité ↑"],
-    ["primary_release_date.desc", "Date de sortie ↓"], ["primary_release_date.asc", "Date de sortie ↑"],
-    ["vote_average.desc", "Note ↓"], ["vote_average.asc", "Note ↑"],
-    ["vote_count.desc", "Nb de votes ↓"], ["revenue.desc", "Revenus ↓"],
-    ["original_title.asc", "Titre A→Z"],
+    ["popularity.desc", tr("Popularity ↓")], ["popularity.asc", tr("Popularity ↑")],
+    ["primary_release_date.desc", tr("Release date ↓")], ["primary_release_date.asc", tr("Release date ↑")],
+    ["vote_average.desc", tr("Rating ↓")], ["vote_average.asc", tr("Rating ↑")],
+    ["vote_count.desc", tr("Vote count ↓")], ["revenue.desc", tr("Revenue ↓")],
+    ["original_title.asc", tr("Title A→Z")],
   ];
   const tvSort = [
-    ["popularity.desc", "Popularité ↓"], ["popularity.asc", "Popularité ↑"],
-    ["first_air_date.desc", "Première diffusion ↓"], ["first_air_date.asc", "Première diffusion ↑"],
-    ["vote_average.desc", "Note ↓"], ["vote_average.asc", "Note ↑"],
-    ["vote_count.desc", "Nb de votes ↓"], ["name.asc", "Titre A→Z"],
+    ["popularity.desc", tr("Popularity ↓")], ["popularity.asc", tr("Popularity ↑")],
+    ["first_air_date.desc", tr("First air date ↓")], ["first_air_date.asc", tr("First air date ↑")],
+    ["vote_average.desc", tr("Rating ↓")], ["vote_average.asc", tr("Rating ↑")],
+    ["vote_count.desc", tr("Vote count ↓")], ["name.asc", tr("Title A→Z")],
   ];
   sort.innerHTML = (isTv() ? tvSort : movieSort)
     .map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
   $("#hide-owned-label").textContent = isTv()
-    ? "Masquer les séries déjà dans Sonarr"
-    : "Masquer les films déjà dans Radarr";
-  $("#q-text-label") && ($("#q-text-label").textContent = isTv() ? "Titre de la série" : "Titre du film");
+    ? tr("Hide TV shows already in Sonarr")
+    : tr("Hide movies already in Radarr");
+  $("#q-text-label") && ($("#q-text-label").textContent = isTv() ? tr("TV show title") : tr("Movie title"));
 }
 
 // ----------------------- init -----------------------
@@ -353,15 +353,15 @@ async function search() {
     state.hasMore = !!data.has_more;
     state.totalResults = data.total_results ?? (data.results || []).length;
     renderResults(data.results || []);
-    const noun = isTv() ? "série(s)" : "film(s)";
-    const owned = isTv() ? "séries possédées" : "films possédés";
+    const noun = isTv() ? tr("TV shows") : tr("movies");
+    const owned = isTv() ? tr("owned shows") : tr("owned movies");
     const count = state.hideOwned
-      ? `${state.totalResults} ${noun} au total (${owned} masqué(e)s)`
+      ? `${state.totalResults} ${noun} total (${owned} hidden)`
       : `${state.totalResults} ${noun}`;
     $("#status").textContent = `${count} · page ${state.viewPage}`;
     renderPagination();
   } catch (e) {
-    $("#status").textContent = "Erreur : " + e.message;
+    $("#status").textContent = tr("Error") + ": " + e.message;
   }
 }
 
@@ -370,13 +370,13 @@ function renderResults(movies) {
   const grid = $("#results");
   grid.innerHTML = "";
   if (!movies.length) {
-    grid.innerHTML = "<p style='color:var(--muted)'>Aucun résultat.</p>";
+    grid.innerHTML = `<p style='color:var(--muted)'>${tr("No results.")}</p>`;
     updateSelectionBar();
     return;
   }
   movies.forEach((m, i) => {
     const card = el("div", "card");
-    // Apparition en cascade, plafonnée pour ne pas retarder le bas de page.
+    // Staggered reveal, capped so the bottom of the page is not held back.
     card.style.setProperty("--i", Math.min(i, 14));
     if (state.selected.has(m.id)) card.classList.add("selected");
     card.appendChild(posterEl(m));
@@ -386,7 +386,7 @@ function renderResults(movies) {
       const box = el("input", "select-box");
       box.type = "checkbox";
       box.checked = state.selected.has(m.id);
-      box.title = "Sélectionner";
+      box.title = tr("Select");
       box.onchange = () => {
         if (box.checked) state.selected.set(m.id, m); else state.selected.delete(m.id);
         card.classList.toggle("selected", box.checked);
@@ -402,22 +402,22 @@ function renderResults(movies) {
     meta.appendChild(el("span", null, year || "—"));
     meta.appendChild(el("span", "rating", `★ ${(m.vote_average || 0).toFixed(1)}`));
     body.appendChild(meta);
-    body.appendChild(el("div", "overview", m.overview || "Pas de description."));
+    body.appendChild(el("div", "overview", m.overview || tr("No description.")));
 
-    const detailBtn = el("button", "detail-btn", "Détails");
+    const detailBtn = el("button", "detail-btn", tr("Details"));
     detailBtn.onclick = () => openDetails(m);
     body.appendChild(detailBtn);
 
     if (state.config.integrations && state.config.integrations.mistral) {
-      const sumBtn = el("button", "summary-btn", "Résumé audio");
+      const sumBtn = el("button", "summary-btn", tr("Audio summary"));
       sumBtn.onclick = () => summarizeMedia(m);
       body.appendChild(sumBtn);
     }
 
     if (isOwned(m)) {
-      body.appendChild(el("div", "badge-in", `✓ Déjà dans ${libName()}`));
+      body.appendChild(el("div", "badge-in", `✓ ${tr("Already in")} ${libName()}`));
     } else {
-      const btn = el("button", "primary", "+ Ajouter");
+      const btn = el("button", "primary", "+ " + tr("Add"));
       btn.onclick = () => openModal(m);
       body.appendChild(btn);
     }
@@ -438,9 +438,9 @@ function updateSelectionBar() {
   // Hide the bar entirely when there's nothing to select on this page.
   bar.classList.toggle("hidden", selectable.length === 0 && state.selected.size === 0);
   const n = state.selected.size;
-  $("#selection-count").textContent = `${n} sélectionné(s)`;
+  $("#selection-count").textContent = `${n} ${tr("selected")}`;
   $("#add-selection").disabled = n === 0;
-  $("#add-selection").textContent = n ? `+ Ajouter la sélection (${n})` : "+ Ajouter la sélection";
+  $("#add-selection").textContent = n ? `+ ${tr("Add selection")} (${n})` : "+ " + tr("Add selection");
 }
 
 function renderPagination() {
@@ -448,7 +448,7 @@ function renderPagination() {
   box.innerHTML = "";
   const hasPrev = state.cursorStack.length > 0;
   if (!hasPrev && !state.hasMore) return;
-  const prev = el("button", null, "← Précédent");
+  const prev = el("button", null, "← " + tr("Previous"));
   prev.disabled = !hasPrev;
   prev.onclick = () => {
     state.cursor = state.cursorStack.pop();
@@ -456,7 +456,7 @@ function renderPagination() {
     search();
     window.scrollTo(0, 0);
   };
-  const next = el("button", null, "Suivant →");
+  const next = el("button", null, tr("Next") + " →");
   next.disabled = !state.hasMore;
   next.onclick = () => {
     state.cursorStack.push(state.cursor);
@@ -483,7 +483,7 @@ function applyModalDefaults() {
   $("#modal-collection-row").hidden = true;
   $("#modal-collection").checked = false;
   $("#modal-collection-name").textContent = "";
-  $("#modal-add").textContent = `Ajouter à ${libName()}`;
+  $("#modal-add").textContent = `${tr("Add to")} ${libName()}`;
 }
 
 function openModal(movie) {
@@ -503,8 +503,8 @@ function openBulkModal() {
   if (!movies.length) return;
   state.pendingMovie = null;
   state.bulkMovies = movies;
-  const noun = isTv() ? "série(s)" : "film(s)";
-  $("#modal-title").textContent = `Ajouter ${movies.length} ${noun} sélectionné(s)`;
+  const noun = isTv() ? tr("TV shows") : tr("movies");
+  $("#modal-title").textContent = `${tr("Add")} ${movies.length} ${noun} (${tr("selected")})`;
   applyModalDefaults();
   $("#modal").classList.remove("hidden");
 }
@@ -553,21 +553,21 @@ async function confirmAdd() {
     if (addCollection && res && Array.isArray(res.added)) {
       const n = res.added.length;
       const skipped = (res.skipped || []).length;
-      let msg = `${n} film(s) de la collection ajouté(s) ✓`;
-      if (skipped) msg += ` · ${skipped} déjà présent(s)`;
-      if (res.errors && res.errors.length) msg += ` · ${res.errors.length} échec(s)`;
+      let msg = `${n} ${tr("titles from the collection added")} ✓`;
+      if (skipped) msg += ` · ${skipped} ${tr("already there")}`;
+      if (res.errors && res.errors.length) msg += ` · ${res.errors.length} ${tr("failed")}`;
       toast(msg, !(res.errors && res.errors.length));
     } else {
       const title = state.pendingMovie.title || state.pendingMovie.name;
-      toast(`"${title}" ajouté à ${lib} ✓`);
+      toast(`"${title}" → ${lib} ✓`);
     }
     if (isTv()) state.pendingMovie.in_sonarr = true; else state.pendingMovie.in_radarr = true;
     $("#modal").classList.add("hidden");
     search();
   } catch (e) {
-    toast("Échec : " + e.message, false);
+    toast(tr("Failed") + ": " + e.message, false);
   } finally {
-    btn.disabled = false; btn.textContent = `Ajouter à ${lib}`;
+    btn.disabled = false; btn.textContent = `${tr("Add to")} ${lib}`;
   }
 }
 
@@ -594,12 +594,12 @@ async function confirmBulkAdd() {
       fail++;
     }
   }
-  const noun = isTv() ? "série(s)" : "film(s)";
-  let msg = `${ok} ${noun} ajouté(s) ✓`;
-  if (fail) msg += ` · ${fail} échec(s)`;
+  const noun = isTv() ? tr("TV shows") : tr("movies");
+  let msg = `${ok} ${noun} ${tr("added")} ✓`;
+  if (fail) msg += ` · ${fail} ${tr("failed")}`;
   toast(msg, fail === 0);
   $("#modal").classList.add("hidden");
-  btn.disabled = false; btn.textContent = `Ajouter à ${lib}`;
+  btn.disabled = false; btn.textContent = `${tr("Add to")} ${lib}`;
   search();
 }
 
@@ -608,9 +608,9 @@ const IMG = (path, size) => (path ? `${state.imageBase}/${size}${path}` : null);
 const fmtDate = (s) => {
   if (!s) return null;
   const d = new Date(s);
-  return isNaN(d) ? s : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  return isNaN(d) ? s : d.toLocaleDateString(uiLocale(), { day: "numeric", month: "long", year: "numeric" });
 };
-const fmtMoney = (n) => (n ? n.toLocaleString("fr-FR") + " $" : null);
+const fmtMoney = (n) => (n ? "$" + n.toLocaleString(uiLocale()) : null);
 const fmtBool = (b) => (b ? "Oui" : "Non");
 
 function detailSection(title) {
@@ -638,7 +638,7 @@ async function openDetails(m, mediaType) {
     renderDetails(d, tv);
     $(".detail-content").scrollTop = 0;
   } catch (e) {
-    body.innerHTML = `<div class="detail-loading">Erreur : ${e.message}</div>`;
+    body.innerHTML = `<div class="detail-loading">${tr("Error")}: ${e.message}</div>`;
   }
 }
 
@@ -663,7 +663,7 @@ function renderDetails(d, tv) {
 
   const info = el("div", "head-info");
   info.appendChild(el("h2", null, year ? `${title} (${year})` : title));
-  if (orig && orig !== title) info.appendChild(el("div", "orig", `Titre original : ${orig}`));
+  if (orig && orig !== title) info.appendChild(el("div", "orig", `${tr("Original title")}: ${orig}`));
   if (d.tagline) info.appendChild(el("div", "tagline", `« ${d.tagline} »`));
 
   const hm = el("div", "head-meta");
@@ -671,8 +671,8 @@ function renderDetails(d, tv) {
   hm.appendChild(el("span", null, `${d.vote_count || 0} votes`));
   if (!tv && d.runtime) hm.appendChild(el("span", null, `${d.runtime} min`));
   if (tv) {
-    if (d.number_of_seasons) hm.appendChild(el("span", null, `${d.number_of_seasons} saison(s)`));
-    if (d.number_of_episodes) hm.appendChild(el("span", null, `${d.number_of_episodes} épisode(s)`));
+    if (d.number_of_seasons) hm.appendChild(el("span", null, `${d.number_of_seasons} ${tr("seasons")}`));
+    if (d.number_of_episodes) hm.appendChild(el("span", null, `${d.number_of_episodes} ${tr("episodes")}`));
   }
   const cert = certification(d, tv, region);
   if (cert) hm.appendChild(el("span", null, `🔞 ${cert}`));
@@ -701,26 +701,26 @@ function renderDetails(d, tv) {
   const facts = el("div", "facts");
   const addF = (k, v) => { const f = fact(k, v); if (f) facts.appendChild(f); };
   if (tv) {
-    addF("Première diffusion", fmtDate(d.first_air_date));
-    addF("Dernière diffusion", fmtDate(d.last_air_date));
+    addF(tr("First air date"), fmtDate(d.first_air_date));
+    addF(tr("Last air date"), fmtDate(d.last_air_date));
     addF("En production", fmtBool(d.in_production));
     addF("Type", d.type);
-    addF("Durée d'un épisode", (d.episode_run_time || []).map((x) => `${x} min`).join(", "));
-    addF("Réseaux", (d.networks || []).map((n) => n.name));
-    addF("Créé par", (d.created_by || []).map((c) => c.name));
-    addF("Pays d'origine", d.origin_country);
+    addF(tr("Episode runtime"), (d.episode_run_time || []).map((x) => `${x} min`).join(", "));
+    addF(tr("Networks"), (d.networks || []).map((n) => n.name));
+    addF(tr("Created by"), (d.created_by || []).map((c) => c.name));
+    addF(tr("Origin country"), d.origin_country);
   } else {
     addF("Date de sortie", fmtDate(d.release_date));
     addF("Budget", fmtMoney(d.budget));
     addF("Recettes", fmtMoney(d.revenue));
-    addF("Pays de production", (d.production_countries || []).map((c) => c.name));
+    addF(tr("Production countries"), (d.production_countries || []).map((c) => c.name));
     if (d.belongs_to_collection) addF("Collection", d.belongs_to_collection.name);
   }
   addF("Statut", d.status);
-  addF("Langue originale", (d.original_language || "").toUpperCase());
-  addF("Langues parlées", (d.spoken_languages || []).map((l) => l.english_name || l.name));
-  addF("Popularité", d.popularity ? Math.round(d.popularity) : null);
-  addF("Note moyenne TMDB", `${(d.vote_average || 0).toFixed(2)} / 10`);
+  addF(tr("Original language"), (d.original_language || "").toUpperCase());
+  addF(tr("Spoken languages"), (d.spoken_languages || []).map((l) => l.english_name || l.name));
+  addF(tr("Popularity"), d.popularity ? Math.round(d.popularity) : null);
+  addF(tr("TMDB rating"), `${(d.vote_average || 0).toFixed(2)} / 10`);
   if (facts.children.length) {
     const s = detailSection("Informations");
     s.appendChild(facts);
@@ -729,14 +729,14 @@ function renderDetails(d, tv) {
 
   // Seasons (tv)
   if (tv && (d.seasons || []).length) {
-    const s = detailSection("Saisons");
+    const s = detailSection(tr("Seasons"));
     const row = el("div", "poster-row");
     d.seasons.forEach((se) => {
       const mini = el("div", "mini");
       const ip = IMG(se.poster_path, "w185");
       const im = el("img"); if (ip) im.src = ip; else im.className = "ph";
       mini.appendChild(im);
-      const ep = se.episode_count ? ` · ${se.episode_count} ép.` : "";
+      const ep = se.episode_count ? ` · ${se.episode_count} ${tr("ep.")}` : "";
       const sy = (se.air_date || "").slice(0, 4);
       mini.appendChild(el("div", "nm", `${se.name}${sy ? ` (${sy})` : ""}${ep}`));
       mini.style.cursor = "default";
@@ -783,7 +783,7 @@ function renderDetails(d, tv) {
       }
     });
     if (grid.children.length) {
-      const s = detailSection("Équipe technique");
+      const s = detailSection(tr("Crew"));
       s.appendChild(grid);
       inner.appendChild(s);
     }
@@ -793,7 +793,7 @@ function renderDetails(d, tv) {
   const vids = (d.videos?.results || []).filter((v) => v.site === "YouTube");
   if (vids.length) {
     vids.sort((a, b) => (a.type === "Trailer" ? -1 : 0) - (b.type === "Trailer" ? -1 : 0));
-    const s = detailSection("Vidéos & bandes-annonces");
+    const s = detailSection(tr("Videos & trailers"));
     const list = el("div", "video-list");
     vids.slice(0, 12).forEach((v) => {
       const a = el("a", null, `▶ ${v.type} — ${v.name}`);
@@ -808,7 +808,7 @@ function renderDetails(d, tv) {
   // Watch providers
   const prov = (d["watch/providers"]?.results || {})[region];
   if (prov) {
-    const s = detailSection(`Où regarder (${region})`);
+    const s = detailSection(`${tr("Where to watch")} (${region})`);
     const groups = [["flatrate", "Abonnement"], ["free", "Gratuit"], ["ads", "Avec pub"],
       ["rent", "Location"], ["buy", "Achat"]];
     groups.forEach(([key, label]) => {
@@ -826,7 +826,7 @@ function renderDetails(d, tv) {
       }
     });
     if (prov.link) {
-      const a = el("a", null, "Voir sur JustWatch →");
+      const a = el("a", null, tr("View on JustWatch") + " →");
       a.href = prov.link; a.target = "_blank"; a.rel = "noopener";
       const ll = el("div", "link-list"); ll.appendChild(a); s.appendChild(ll);
     }
@@ -836,7 +836,7 @@ function renderDetails(d, tv) {
   // Keywords
   const kws = (tv ? d.keywords?.results : d.keywords?.keywords) || [];
   if (kws.length) {
-    const s = detailSection("Mots-clés");
+    const s = detailSection(tr("Keywords"));
     const box = el("div", "genre-chips");
     kws.forEach((k) => box.appendChild(el("span", "chip", k.name)));
     s.appendChild(box);
@@ -845,7 +845,7 @@ function renderDetails(d, tv) {
 
   // Production companies
   if ((d.production_companies || []).length) {
-    const s = detailSection("Sociétés de production");
+    const s = detailSection(tr("Production companies"));
     s.appendChild(el("p", "overview-text",
       d.production_companies.map((c) => c.name + (c.origin_country ? ` (${c.origin_country})` : "")).join(" · ")));
     inner.appendChild(s);
@@ -881,14 +881,14 @@ function renderDetails(d, tv) {
 
   // Recommendations & similar
   addMiniRow(inner, "Recommandations", d.recommendations?.results, tv);
-  addMiniRow(inner, "Titres similaires", d.similar?.results, tv);
+  addMiniRow(inner, tr("Similar titles"), d.similar?.results, tv);
 
   // Images
   if (d.images) {
     const b = (d.images.backdrops || []).length, p = (d.images.posters || []).length, l = (d.images.logos || []).length;
     if (b || p || l) {
       const s = detailSection("Galerie d'images");
-      s.appendChild(el("p", "overview-text", `${b} arrière-plan(s), ${p} affiche(s), ${l} logo(s).`));
+      s.appendChild(el("p", "overview-text", `${b} ${tr("backdrops")}, ${p} ${tr("posters")}, ${l} ${tr("logos")}.`));
       const row = el("div", "poster-row");
       (d.images.backdrops || []).slice(0, 10).forEach((img) => {
         const ip = IMG(img.file_path, "w300");
@@ -902,7 +902,7 @@ function renderDetails(d, tv) {
 
   // Alternative titles (movie)
   if (!tv && (d.alternative_titles?.titles || []).length) {
-    const s = detailSection("Titres alternatifs");
+    const s = detailSection(tr("Alternative titles"));
     s.appendChild(el("p", "overview-text",
       d.alternative_titles.titles.slice(0, 30).map((t) => `${t.title} (${t.iso_3166_1})`).join(" · ")));
     inner.appendChild(s);
@@ -985,10 +985,15 @@ function closeAssistant() {
   $("#assistant-fab").classList.remove("listening");
 }
 
-// ---- Natural French voice selection ----
-function frenchVoices() {
+// ---- Voice selection for the spoken summary ----
+// Prefer voices matching the interface language; fall back to whatever exists.
+function ttsVoices() {
   if (!window.speechSynthesis) return [];
-  return window.speechSynthesis.getVoices().filter((v) => /^fr(\b|-|_)/i.test(v.lang));
+  const all = window.speechSynthesis.getVoices();
+  const lang = (document.documentElement.lang || "en").slice(0, 2);
+  const re = new RegExp("^" + lang + "(\\b|-|_)", "i");
+  const matching = all.filter((v) => re.test(v.lang));
+  return matching.length ? matching : all;
 }
 // Rank voices: cloud/“natural”/named voices sound better than default robotic ones.
 function rankVoice(v) {
@@ -996,7 +1001,7 @@ function rankVoice(v) {
   let s = 0;
   if (n.includes("google")) s += 6;
   if (n.includes("natural") || n.includes("naturel")) s += 6;
-  if (/(amélie|amelie|thomas|audrey|marie|denise|henri|charlotte|claude|paul)/.test(n)) s += 3;
+  if (/(amelie|thomas|audrey|marie|denise|henri|charlotte|paul|samantha|daniel|karen)/.test(n)) s += 3;
   if (v.localService === false) s += 2;  // online voices are usually higher quality
   return s;
 }
@@ -1004,16 +1009,16 @@ function pickDefaultVoice(voices) {
   return voices.slice().sort((a, b) => rankVoice(b) - rankVoice(a))[0] || null;
 }
 function selectedVoice() {
-  const voices = frenchVoices();
+  const voices = ttsVoices();
   return voices.find((v) => v.voiceURI === state.ttsVoiceURI) || pickDefaultVoice(voices);
 }
 function populateVoiceSelect() {
   const sel = $("#summary-voice");
   if (!sel) return;
-  const voices = frenchVoices();
+  const voices = ttsVoices();
   sel.innerHTML = voices.length
     ? voices.map((v) => `<option value="${v.voiceURI}">${v.name}</option>`).join("")
-    : '<option value="">(voix système par défaut)</option>';
+    : `<option value="">(${tr("system default voice")})</option>`;
   const cur = selectedVoice();
   if (cur) { sel.value = cur.voiceURI; state.ttsVoiceURI = cur.voiceURI; }
 }
@@ -1026,7 +1031,7 @@ function browserSpeak(text, orb) {
     if (!text || !window.speechSynthesis) { if (orb) orb.className = "summary-orb"; return; }
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(stripTtsTags(text));
-    u.lang = "fr-FR";
+    u.lang = speechLocale();
     const v = selectedVoice();
     if (v) u.voice = v;
     u.rate = 1.0;
@@ -1050,18 +1055,18 @@ function speak(text) { speakText(text); }
 function startListening() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    setAssistantStatus("Reconnaissance vocale non supportée par ce navigateur — tapez votre demande ci-dessous.");
+    setAssistantStatus(tr("Speech recognition is not supported by this browser — type your request below."));
     return;
   }
   const r = new SR();
   _recognition = r;
-  r.lang = "fr-FR";
+  r.lang = speechLocale();
   r.interimResults = true;
   r.continuous = false;
   r.maxAlternatives = 1;
   setOrb("listening");
   $("#assistant-fab").classList.add("listening");
-  setAssistantStatus("Je vous écoute…");
+  setAssistantStatus(tr("Listening…"));
   $("#assistant-transcript").textContent = "";
   r.onresult = (e) => {
     let t = "";
@@ -1071,21 +1076,21 @@ function startListening() {
   r.onerror = (e) => {
     setOrb(""); $("#assistant-fab").classList.remove("listening");
     setAssistantStatus(e.error === "not-allowed"
-      ? "Micro refusé — autorisez le micro dans le navigateur."
-      : "Erreur micro : " + e.error);
+      ? tr("Microphone denied — allow it in your browser.")
+      : tr("Microphone error") + ": " + e.error);
   };
   r.onend = () => {
     setOrb(""); $("#assistant-fab").classList.remove("listening");
     const t = $("#assistant-transcript").textContent.trim();
     if (t) askAssistant(t);
-    else setAssistantStatus("Je n'ai rien entendu. Réessayez.");
+    else setAssistantStatus(tr("I did not catch that. Try again."));
   };
   try { r.start(); } catch (e) { /* already started */ }
 }
 
 async function askAssistant(text) {
   setOrb("thinking");
-  setAssistantStatus("Je réfléchis…");
+  setAssistantStatus(tr("Thinking…"));
   setReply("");
   try {
     const plan = await api("/assistant", {
@@ -1096,13 +1101,13 @@ async function askAssistant(text) {
     setOrb("");
     setReply(plan.explanation || "C'est parti !");
     await applyPlan(plan);
-    setAssistantStatus("Terminé ✓");
+    setAssistantStatus(tr("Done") + " ✓");
     speak(plan.spoken || plan.explanation);
     setTimeout(closeAssistant, 1100);
   } catch (e) {
     setOrb("");
     setAssistantStatus("");
-    setReply("Échec : " + e.message, true);
+    setReply(tr("Failed") + ": " + e.message, true);
   }
 }
 
@@ -1185,16 +1190,16 @@ function renderAssistantTitles(plan) {
   const results = plan.results || [];
   renderResults(results);
   $("#pagination").innerHTML = "";
-  const noun = isTv() ? "série(s)" : "film(s)";
-  $("#status").textContent = `${results.length} ${noun} suggéré(s)`;
+  const noun = isTv() ? tr("TV shows") : tr("movies");
+  $("#status").textContent = `${results.length} ${noun} ${tr("suggested")}`;
   showAssistantBanner(plan.explanation || "Suggestions de l'IA");
 }
 
 function showAssistantBanner(text) {
   const b = $("#assistant-banner");
   b.innerHTML = "";
-  b.appendChild(el("span", null, "✦ " + (text || "Résultats proposés par l'IA")));
-  const x = el("button", null, "✕ Effacer");
+  b.appendChild(el("span", null, "✦ " + (text || tr("Suggested by AI"))));
+  const x = el("button", null, "✕ " + tr("Clear"));
   x.onclick = () => b.classList.add("hidden");
   b.appendChild(x);
   b.classList.remove("hidden");
@@ -1215,8 +1220,8 @@ function describeFilters(f) {
   const dg = f["primary_release_date.gte"] || f["first_air_date.gte"];
   const dl = f["primary_release_date.lte"] || f["first_air_date.lte"];
   if (dg) parts.push("depuis " + dg);
-  if (dl) parts.push("jusqu'à " + dl);
-  if (f.primary_release_year || f.first_air_date_year) parts.push("année " + (f.primary_release_year || f.first_air_date_year));
+  if (dl) parts.push(tr("until") + " " + dl);
+  if (f.primary_release_year || f.first_air_date_year) parts.push(tr("year") + " " + (f.primary_release_year || f.first_air_date_year));
   if (f["vote_average.gte"]) parts.push("note ≥ " + f["vote_average.gte"]);
   if (f["vote_count.gte"]) parts.push("votes ≥ " + f["vote_count.gte"]);
   if (f.with_original_language) parts.push("langue " + f.with_original_language);
@@ -1253,7 +1258,7 @@ function fillListModal({ media, filters, profiles, folders, values, isEdit }) {
   const tv = media === "tv";
   $("#list-modal-title") && ($("#list-modal-title").textContent = "");
   $("#list-summary").textContent =
-    `${tv ? "Séries (Sonarr)" : "Films (Radarr)"} · ${describeFilters(filters) || "aucun filtre (tout)"}`;
+    `${tv ? tr("TV shows (Sonarr)") : tr("Movies (Radarr)")} · ${describeFilters(filters) || tr("no filter (everything)")}`;
   $("#list-profile").innerHTML = profiles.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
   $("#list-folder").innerHTML = folders.map((f) => `<option value="${f.path}">${f.path}</option>`).join("");
   if (values.quality_profile_id) $("#list-profile").value = values.quality_profile_id;
@@ -1264,7 +1269,7 @@ function fillListModal({ media, filters, profiles, folders, values, isEdit }) {
   $("#list-monitor").checked = values.monitor !== false;
   $("#list-searchnow").checked = values.search_on_add !== false;
   $("#list-maxpages").value = values.max_pages || 3;
-  $("#list-save").textContent = isEdit ? "Mettre à jour" : "Enregistrer la liste";
+  $("#list-save").textContent = isEdit ? tr("Update") : tr("Save list");
   $("#list-modal").classList.remove("hidden");
 }
 
@@ -1304,13 +1309,13 @@ async function openEditList(l) {
       isEdit: true,
     });
   } catch (e) {
-    toast("Impossible de charger les options : " + e.message, false);
+    toast(tr("Could not load the options") + ": " + e.message, false);
   }
 }
 
 async function saveList() {
   const name = $("#list-name").value.trim();
-  if (!name) { toast("Donnez un nom à la liste", false); return; }
+  if (!name) { toast(tr("Give the list a name"), false); return; }
   const tv = state.listModalMedia === "tv";
   const body = {
     name,
@@ -1325,27 +1330,27 @@ async function saveList() {
   if (!tv) body.minimum_availability = $("#list-availability").value;
   const editing = state.editingListId;
   const btn = $("#list-save");
-  btn.disabled = true; btn.textContent = editing ? "Mise à jour…" : "Enregistrement…";
+  btn.disabled = true; btn.textContent = editing ? tr("Updating…") : tr("Saving…");
   try {
     await api(editing ? `/lists/${editing}` : "/lists", {
       method: editing ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    toast(editing ? `Liste « ${name} » mise à jour ✓` : `Liste « ${name} » créée ✓`);
+    toast(editing ? `${tr("List")} “${name}” ${tr("updated")} ✓` : `${tr("List")} “${name}” ${tr("created")} ✓`);
     $("#list-modal").classList.add("hidden");
     if (!$("#lists-modal").classList.contains("hidden")) renderLists(await api("/lists"));
   } catch (e) {
-    toast("Échec : " + e.message, false);
+    toast(tr("Failed") + ": " + e.message, false);
   } finally {
-    btn.disabled = false; btn.textContent = editing ? "Mettre à jour" : "Enregistrer la liste";
+    btn.disabled = false; btn.textContent = editing ? tr("Update") : tr("Save list");
   }
 }
 
 async function previewList(media, filters, maxPages, label) {
   const m = $("#preview-modal");
   m.classList.remove("hidden");
-  $("#preview-title").textContent = "Aperçu — " + (label || "");
+  $("#preview-title").textContent = tr("Preview") + " — " + (label || "");
   $("#preview-summary").textContent = "Analyse en cours…";
   $("#preview-grid").innerHTML = "";
   try {
@@ -1356,12 +1361,12 @@ async function previewList(media, filters, maxPages, label) {
     });
     const tv = media === "tv";
     $("#preview-summary").textContent =
-      `${d.scanned} média(s) analysés · ${d.new} nouveau(x) à ajouter · ${d.owned} déjà présent(s)` +
-      (d.total_results ? ` (≈ ${d.total_results} au total côté TMDB)` : "");
+      `${d.scanned} ${tr("scanned")} · ${d.new} ${tr("new to add")} · ${d.owned} ${tr("already there")}` +
+      (d.total_results ? ` (≈ ${d.total_results} ${tr("total on TMDB")})` : "");
     const grid = $("#preview-grid");
     grid.innerHTML = "";
     if (!d.results.length) {
-      grid.innerHTML = "<p class='muted'>Aucun média ne correspond à ces filtres.</p>";
+      grid.innerHTML = `<p class='muted'>${tr("Nothing matches these filters.")}</p>`;
       return;
     }
     d.results.forEach((it, i) => {
@@ -1375,12 +1380,12 @@ async function previewList(media, filters, maxPages, label) {
       meta.appendChild(el("span", "rating", `★ ${(it.vote_average || 0).toFixed(1)}`));
       body.appendChild(meta);
       const owned = tv ? it.in_sonarr : it.in_radarr;
-      body.appendChild(el("div", owned ? "badge-in" : "badge-new", owned ? "✓ Déjà présent" : "Nouveau"));
+      body.appendChild(el("div", owned ? "badge-in" : "badge-new", owned ? "✓ " + tr("Already there") : tr("New")));
       card.appendChild(body);
       grid.appendChild(card);
     });
   } catch (e) {
-    $("#preview-summary").textContent = "Erreur : " + e.message;
+    $("#preview-summary").textContent = tr("Error") + ": " + e.message;
   }
 }
 
@@ -1390,7 +1395,7 @@ async function openLists() {
   try {
     renderLists(await api("/lists"));
   } catch (e) {
-    $("#lists-body").innerHTML = "Erreur : " + e.message;
+    $("#lists-body").innerHTML = tr("Error") + ": " + e.message;
   }
 }
 
@@ -1398,21 +1403,21 @@ function renderLists(lists) {
   const box = $("#lists-body");
   box.innerHTML = "";
   if (!lists.length) {
-    box.innerHTML = "<p class='muted'>Aucune liste pour le moment. Réglez des filtres puis « Créer une liste auto ».</p>";
+    box.innerHTML = `<p class='muted'>${tr("No lists yet. Set some filters, then hit “Create auto-list”.")}</p>`;
     return;
   }
   lists.forEach((l) => {
     const card = el("div", "list-card");
     const head = el("div", "lc-head");
     head.appendChild(el("span", "lc-name", l.name));
-    head.appendChild(el("span", "list-badge", l.media === "tv" ? "Séries" : "Films"));
+    head.appendChild(el("span", "list-badge", l.media === "tv" ? tr("TV shows") : tr("Movies")));
     head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? "Active" : "En pause"));
     card.appendChild(head);
 
     const meta = el("div", "lc-meta");
     meta.innerHTML =
       `Filtres : <span class="lc-filters">${describeFilters(l.filters) || "aucun (tout)"}</span><br>` +
-      `${l.max_pages} page(s) scannée(s) · dernier scan : ${l.last_run ? new Date(l.last_run).toLocaleString("fr-FR") : "jamais"} · total ajoutés : ${l.total_added || 0}`;
+      `${l.max_pages} ${tr("pages scanned")} · ${tr("last run")}: ${l.last_run ? new Date(l.last_run).toLocaleString() : tr("never")} · ${tr("total added")}: ${l.total_added || 0}`;
     card.appendChild(meta);
 
     if (l.last_result) {
@@ -1420,7 +1425,7 @@ function renderLists(lists) {
       const res = el("div", "lc-result");
       res.innerHTML = r.error
         ? `⚠️ ${r.error}`
-        : `Dernier passage : <b>${r.added}</b> ajouté(s), ${r.skipped} déjà présent(s), ${r.errors} erreur(s)` +
+        : `${tr("Last run")}: <b>${r.added}</b> ${tr("added")}, ${r.skipped} ${tr("already there")}, ${r.errors} ${tr("errors")}` +
           (r.added_titles && r.added_titles.length ? ` — ${r.added_titles.slice(0, 5).join(", ")}${r.added_titles.length > 5 ? "…" : ""}` : "");
       card.appendChild(res);
     }
@@ -1428,7 +1433,7 @@ function renderLists(lists) {
     const actions = el("div", "lc-actions");
     const run = el("button", "primary", "Lancer maintenant");
     run.onclick = () => runListNow(l.id, run);
-    const prev = el("button", null, "Aperçu");
+    const prev = el("button", null, tr("Preview"));
     prev.onclick = () => previewList(l.media, l.filters, l.max_pages, l.name);
     const edit = el("button", null, "Modifier");
     edit.onclick = () => openEditList(l);
@@ -1446,10 +1451,10 @@ async function runListNow(id, btn) {
   if (btn) { btn.disabled = true; btn.textContent = "Scan en cours…"; }
   try {
     const r = await api(`/lists/${id}/run`, { method: "POST" });
-    toast(r.error ? "Erreur : " + r.error : `${r.added} ajouté(s), ${r.skipped} déjà présent(s)`, !r.error);
+    toast(r.error ? tr("Error") + ": " + r.error : `${r.added} ${tr("added")}, ${r.skipped} ${tr("already there")}`, !r.error);
     renderLists(await api("/lists"));
   } catch (e) {
-    toast("Échec : " + e.message, false);
+    toast(tr("Failed") + ": " + e.message, false);
     if (btn) { btn.disabled = false; btn.textContent = "Lancer maintenant"; }
   }
 }
@@ -1462,15 +1467,15 @@ async function toggleList(l) {
       body: JSON.stringify({ ...l, enabled: !l.enabled }),
     });
     renderLists(await api("/lists"));
-  } catch (e) { toast("Échec : " + e.message, false); }
+  } catch (e) { toast(tr("Failed") + ": " + e.message, false); }
 }
 
 async function deleteList(id) {
-  if (!confirm("Supprimer définitivement cette liste ?")) return;
+  if (!confirm(tr("Delete this list permanently?"))) return;
   try {
     await api(`/lists/${id}`, { method: "DELETE" });
     renderLists(await api("/lists"));
-  } catch (e) { toast("Échec : " + e.message, false); }
+  } catch (e) { toast(tr("Failed") + ": " + e.message, false); }
 }
 
 // ----------------------- spoken summary -----------------------
@@ -1486,7 +1491,7 @@ async function summarizeMedia(m) {
   $("#summary-title").textContent = m.title || m.name;
   $("#summary-text").textContent = "";
   $("#summary-orb").className = "summary-orb thinking";
-  document.getElementById("summary-text").textContent = "Génération du résumé par l'IA…";
+  document.getElementById("summary-text").textContent = tr("Generating the AI summary…");
   try {
     const r = await api("/summarize", {
       method: "POST",
@@ -1498,7 +1503,7 @@ async function summarizeMedia(m) {
     speakSummary(r.summary);
   } catch (e) {
     $("#summary-orb").className = "summary-orb";
-    $("#summary-text").textContent = "Échec : " + e.message;
+    $("#summary-text").textContent = tr("Failed") + ": " + e.message;
   }
 }
 
@@ -1574,7 +1579,7 @@ function bindUI() {
     };
   });
 
-  // Restaure les préférences persistées dans les contrôles.
+  // Restore persisted preferences into the controls.
   $("#hide-owned").checked = state.hideOwned;
   if ([...$("#page-size").options].some((o) => o.value === String(state.pageSize))) {
     $("#page-size").value = String(state.pageSize);
@@ -1676,4 +1681,4 @@ function bindUI() {
   setupAutocomplete("#f-company-search", "#f-company-results", "#f-company-selected", "/tmdb/search/company", state.companies, "name");
 }
 
-init().catch((e) => { document.body.innerHTML = `<p style="padding:20px;color:#e25555">Erreur d'initialisation : ${e.message}</p>`; });
+init().catch((e) => { document.body.innerHTML = `<p style="padding:20px;color:#e25555">${tr("Startup error")}: ${e.message}</p>`; });

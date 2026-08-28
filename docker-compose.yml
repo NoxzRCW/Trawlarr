@@ -1,7 +1,7 @@
 services:
-  media-search:
+  trawlarr:
     build: .
-    container_name: radarr-media-search
+    container_name: trawlarr
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -11,8 +11,8 @@ services:
     environment:
       # --- TMDB ---
       TMDB_API_KEY: ${TMDB_API_KEY}
-      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-fr-FR}
-      TMDB_REGION: ${TMDB_REGION:-FR}
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
       # --- Radarr ---
       RADARR_URL: ${RADARR_URL}
       RADARR_API_KEY: ${RADARR_API_KEY}
@@ -35,6 +35,7 @@ services:
       # --- Mistral AI (voice assistant, optional) ---
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}
+      ASSISTANT_LANGUAGE: ${ASSISTANT_LANGUAGE:-}
       # --- Auto-lists ---
       DATA_DIR: ${DATA_DIR:-/data}
       LIST_REFRESH_HOURS: ${LIST_REFRESH_HOURS:-12}

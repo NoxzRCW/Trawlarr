@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import settings
+from .config import assistant_language, settings
 from .mistral import MistralError, mistral
 from .radarr import RadarrError, radarr
 from .sonarr import SonarrError, sonarr
@@ -37,7 +37,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.app_title, lifespan=lifespan)
-# Compresse les réponses JSON/statiques : pages de résultats plus rapides.
+# Compress JSON and static responses: result pages load noticeably faster.
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -612,7 +612,7 @@ async def add_to_sonarr(payload: dict[str, Any]) -> Any:
     if not tvdb_id:
         raise HTTPException(
             status_code=404,
-            detail="Aucun identifiant TVDB trouvé pour cette série (introuvable côté Sonarr).",
+            detail="No TVDB id found for this show (Sonarr cannot look it up).",
         )
 
     return await sonarr.add_series(
@@ -630,40 +630,41 @@ async def add_to_sonarr(payload: dict[str, Any]) -> Any:
 def _build_assistant_prompt(movie_genres: list[dict], tv_genres: list[dict]) -> str:
     mg = ", ".join(f'{g["name"]}={g["id"]}' for g in movie_genres)
     tg = ", ".join(f'{g["name"]}={g["id"]}' for g in tv_genres)
+    lang = assistant_language()
     return (
-        "Tu es l'assistant d'un site de recherche de films (Radarr) et de séries "
-        "(Sonarr) basé sur l'API TMDB. L'utilisateur te parle en français. À partir "
-        "de sa demande, tu produis UNIQUEMENT un objet JSON (aucun texte autour) "
-        "décrivant l'action à effectuer.\n\n"
-        "Schéma JSON attendu :\n"
+        f"You are the assistant of a movie (Radarr) and TV show (Sonarr) discovery "
+        f"app built on the TMDB API. The user talks to you in {lang}. From their "
+        "request, you output ONLY a JSON object (no surrounding text) describing "
+        "the action to perform.\n\n"
+        "Expected JSON schema:\n"
         "{\n"
-        '  "media": "movie" | "tv",   // séries -> "tv", sinon "movie"\n'
+        '  "media": "movie" | "tv",   // TV shows -> "tv", otherwise "movie"\n'
         '  "mode": "discover" | "titles",\n'
-        '  "filters": {               // si mode = "discover" (tous optionnels)\n'
+        '  "filters": {               // when mode = "discover" (all optional)\n'
         '     "with_genres": [int], "without_genres": [int],\n'
         '     "sort_by": "popularity.desc|vote_average.desc|primary_release_date.desc|first_air_date.desc|revenue.desc|vote_count.desc",\n'
         '     "vote_average_gte": number, "vote_count_gte": int,\n'
         '     "year_min": int, "year_max": int,\n'
-        '     "with_original_language": "code ISO 639-1 (ex: ja, en, fr)",\n'
-        '     "with_origin_country": "codes ISO 3166-1 séparés par | (ex: US|GB)",\n'
+        '     "with_original_language": "ISO 639-1 code (e.g. ja, en, fr)",\n'
+        '     "with_origin_country": "ISO 3166-1 codes separated by | (e.g. US|GB)",\n'
         '     "runtime_gte": int, "runtime_lte": int,\n'
-        '     "query": "fragment de titre si l\'utilisateur cherche un titre précis"\n'
+        '     "query": "title fragment when the user is after one specific title"\n'
         "  },\n"
-        '  "titles": ["Titre 1", "Titre 2", ...],  // si mode = "titles"\n'
-        '  "explanation": "courte phrase en français décrivant ce que tu as compris",\n'
-        '  "spoken": "réponse orale courte et naturelle en français"\n'
+        '  "titles": ["Title 1", "Title 2", ...],  // when mode = "titles"\n'
+        f'  "explanation": "one short sentence in {lang} describing what you understood",\n'
+        f'  "spoken": "a short, natural spoken answer in {lang}"\n'
         "}\n\n"
-        "Règles :\n"
-        "- Utilise mode=\"discover\" pour des recherches par thème, genre, époque, "
-        "note, langue, pays, durée, popularité, etc.\n"
-        "- Utilise mode=\"titles\" pour des recommandations par l'exemple (\"comme "
-        "Inception\"), ou quand l'utilisateur ne sait pas quoi regarder : propose "
-        "alors 8 à 12 titres pertinents et réels.\n"
-        "- N'emploie que des identifiants de genres issus de ces listes.\n"
-        f"- Genres FILMS : {mg}\n"
-        f"- Genres SÉRIES : {tg}\n"
-        "- Si la demande est vague, fais des choix raisonnables. Réponds toujours "
-        "en français pour explanation et spoken."
+        "Rules:\n"
+        '- Use mode="discover" for searches by theme, genre, era, rating, language, '
+        "country, runtime, popularity, and so on.\n"
+        '- Use mode="titles" for recommendations by example ("like Inception"), or '
+        "when the user does not know what to watch: then suggest 8 to 12 relevant, "
+        "real titles.\n"
+        "- Only use genre ids taken from these lists.\n"
+        f"- MOVIE genres: {mg}\n"
+        f"- TV genres: {tg}\n"
+        "- If the request is vague, make reasonable choices. Always write "
+        f"explanation and spoken in {lang}."
     )
 
 
@@ -736,47 +737,47 @@ async def summarize(payload: dict[str, Any]) -> Any:
 
     context = {
         "titre": title,
-        "année": year,
-        "type": "série" if media == "tv" else "film",
+        "year": year,
+        "type": "tv show" if media == "tv" else "movie",
         "genres": genres,
         "synopsis_officiel": d.get("overview", ""),
         "acteurs_principaux": cast,
         "note_tmdb": d.get("vote_average"),
         "pays": [c.get("name") for c in d.get("production_countries", [])],
-        "créateurs": [c.get("name") for c in d.get("created_by", [])] if media == "tv" else None,
+        "creators": [c.get("name") for c in d.get("created_by", [])] if media == "tv" else None,
     }
     import random
     # A randomly-chosen angle each call keeps every summary distinct.
     angles = [
-        "commence par planter l'ambiance ou le décor",
-        "commence par évoquer le thème central ou la question que pose l'œuvre",
-        "commence en mentionnant un acteur principal et son rôle",
-        "commence par le genre et le ton (ce que l'on ressent en regardant)",
-        "commence par le public ou l'envie à laquelle ça répond",
-        "commence par une mise en contexte (époque, lieu, univers)",
+        "open by setting the mood or the setting",
+        "open on the central theme, or the question the work asks",
+        "open by naming a lead actor and their role",
+        "open on the genre and the tone (what it feels like to watch)",
+        "open on who it is for, or the craving it answers",
+        "open by placing it in context (era, place, universe)",
     ]
     angle = random.choice(angles)
+    lang = assistant_language()
     system = (
-        "Tu es un présentateur ciné/séries chaleureux et naturel. À partir des "
-        "données fournies (JSON), rédige en français un résumé ORAL d'environ 110 "
-        "à 170 mots, à lire à voix haute. Présente le média, son ambiance, cite "
-        "les acteurs principaux et les thèmes abordés, et indique à qui il "
-        "plaira. STRICTEMENT SANS SPOILER : ne révèle aucun rebondissement ni la "
-        "fin. Style fluide, un seul paragraphe parlé, sans listes ni titres.\n"
-        "IMPORTANT — sois unique à CHAQUE fois : ne commence JAMAIS par « Alors », "
-        "« Plongez », « Imaginez », « Préparez-vous », « Bienvenue » ni aucune "
-        "formule toute faite. Varie l'ouverture et la structure. Pour ce résumé, "
-        f"{angle}. Appuie-toi sur les détails concrets de CETTE œuvre (titre, "
-        "année, acteurs, genres) pour que le texte lui soit propre.\n"
-        "Le texte est destiné à être LU À VOIX HAUTE : n'utilise AUCun formatage "
-        "Markdown (pas d'astérisques *, pas de soulignés _, pas de dièses #, pas "
-        "de guillemets pour les titres). Écris les titres tels quels, en clair. "
-        "Réponds uniquement avec le texte brut du résumé."
+        f"You are a warm, natural film and TV presenter. From the JSON data "
+        f"provided, write a SPOKEN summary in {lang} of about 110 to 170 words, "
+        "meant to be read aloud. Introduce the title, its mood, name the main "
+        "actors and the themes it deals with, and say who will enjoy it. "
+        "STRICTLY NO SPOILERS: never reveal a twist or the ending. Flowing style, "
+        "a single spoken paragraph, no lists and no headings.\n"
+        "IMPORTANT — be different EVERY time: never open with a stock formula "
+        "(\"So\", \"Dive into\", \"Imagine\", \"Get ready\", \"Welcome\"). Vary the "
+        f"opening and the structure. For this one, {angle}. Lean on the concrete "
+        "details of THIS title (name, year, cast, genres) so the text could only "
+        "be about it.\n"
+        "The text will be READ ALOUD: use NO Markdown formatting (no asterisks *, "
+        "no underscores _, no hashes #, no quotes around titles). Write titles "
+        "plainly. Answer with the raw summary text only."
     )
     import json as _json
     import re as _re
     text = await mistral.chat_text(system, _json.dumps(context, ensure_ascii=False), temperature=0.95)
-    # Defensive cleanup: strip Markdown emphasis so TTS doesn't read "astérisque".
+    # Defensive cleanup: strip Markdown emphasis so TTS does not read "asterisk".
     text = _re.sub(r"[*_`#]+", "", text)
     text = _re.sub(r"[ \t]{2,}", " ", text).strip()
     return {"title": title, "year": year, "summary": text}
@@ -801,7 +802,7 @@ async def _add_movie_from_list(lst: dict[str, Any], tmdb_id: int) -> dict[str, A
 async def _add_series_from_list(lst: dict[str, Any], tmdb_id: int) -> dict[str, Any]:
     tvdb_id = await _resolve_tvdb(int(tmdb_id))
     if not tvdb_id:
-        raise SonarrError(f"Pas d'identifiant TVDB pour la série TMDB {tmdb_id}")
+        raise SonarrError(f"No TVDB id for TMDB show {tmdb_id}")
     return await sonarr.add_series(
         tvdb_id=int(tvdb_id),
         quality_profile_id=int(lst["quality_profile_id"]),
@@ -820,7 +821,7 @@ async def _resolve_list_add_target(lst: dict[str, Any]) -> dict[str, Any]:
     if not lst.get("quality_profile_id"):
         profiles = await client.quality_profiles()
         if not profiles:
-            raise RuntimeError(f"Aucun profil de qualité {media} disponible")
+            raise RuntimeError(f"No {media} quality profile available")
         lst["quality_profile_id"] = profiles[0]["id"]
     if not lst.get("root_folder"):
         folders = await client.root_folders()

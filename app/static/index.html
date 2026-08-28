@@ -1,20 +1,20 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Media Search</title>
+  <title>Trawlarr — discover and auto-add to Radarr &amp; Sonarr</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=22" />
+  <link rel="stylesheet" href="/style.css?v=23" />
 </head>
 <body>
   <header>
-    <button id="filter-toggle" class="filter-toggle" aria-label="Afficher/masquer les filtres">
+    <button id="filter-toggle" class="filter-toggle" aria-label="Show/hide filters">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
     </button>
-    <h1><span class="mark">✦</span>Media <em>Search</em></h1>
+    <h1><span class="mark">✦</span>Trawl<em>arr</em></h1>
     <div id="health" class="health"></div>
   </header>
 
@@ -22,63 +22,63 @@
     <!-- ===================== Filters sidebar ===================== -->
     <aside id="filters" class="filters">
       <div class="media-switch">
-        <button class="media-btn active" data-media="movie">Films</button>
-        <button class="media-btn" data-media="tv">Séries</button>
+        <button class="media-btn active" data-media="movie">Movies</button>
+        <button class="media-btn" data-media="tv">TV Shows</button>
       </div>
       <div class="tabs">
-        <button class="tab active" data-mode="discover">Filtres avancés</button>
-        <button class="tab" data-mode="search">Recherche texte</button>
+        <button class="tab active" data-mode="discover">Advanced filters</button>
+        <button class="tab" data-mode="search">Title search</button>
       </div>
 
       <!-- Text search -->
       <section id="panel-search" class="panel hidden">
-        <label>Titre du film
-          <input type="text" id="q-text" placeholder="ex: Inception" />
+        <label><span id="q-text-label">Movie title</span>
+          <input type="text" id="q-text" placeholder="e.g. Inception" />
         </label>
-        <label>Année <input type="number" id="q-year" placeholder="2010" /></label>
-        <label class="checkbox"><input type="checkbox" id="q-adult-search" /> Inclure contenu adulte</label>
+        <label>Year <input type="number" id="q-year" placeholder="2010" /></label>
+        <label class="checkbox"><input type="checkbox" id="q-adult-search" /> Include adult content</label>
       </section>
 
       <!-- Discover -->
       <section id="panel-discover" class="panel">
-        <label>Trier par
+        <label>Sort by
           <select id="f-sort">
-            <option value="popularity.desc">Popularité ↓</option>
-            <option value="popularity.asc">Popularité ↑</option>
-            <option value="primary_release_date.desc">Date de sortie ↓</option>
-            <option value="primary_release_date.asc">Date de sortie ↑</option>
-            <option value="vote_average.desc">Note ↓</option>
-            <option value="vote_average.asc">Note ↑</option>
-            <option value="vote_count.desc">Nb de votes ↓</option>
-            <option value="revenue.desc">Revenus ↓</option>
-            <option value="original_title.asc">Titre A→Z</option>
+            <option value="popularity.desc">Popularity ↓</option>
+            <option value="popularity.asc">Popularity ↑</option>
+            <option value="primary_release_date.desc">Release date ↓</option>
+            <option value="primary_release_date.asc">Release date ↑</option>
+            <option value="vote_average.desc">Rating ↓</option>
+            <option value="vote_average.asc">Rating ↑</option>
+            <option value="vote_count.desc">Vote count ↓</option>
+            <option value="revenue.desc">Revenue ↓</option>
+            <option value="original_title.asc">Title A→Z</option>
           </select>
         </label>
 
         <fieldset>
           <legend>Genres</legend>
           <div id="f-genres" class="chips"></div>
-          <small>Tapez pour cycler : <span class="accent-inc">inclure</span> → <span class="accent-exc">exclure</span> → aucun · (Maj+clic = exclure sur PC)</small>
+          <small>Click to cycle: <span class="accent-inc">include</span> → <span class="accent-exc">exclude</span> → off · (Shift+click to exclude)</small>
         </fieldset>
 
         <fieldset id="fs-dates">
-          <legend id="fs-dates-legend">Dates de sortie</legend>
-          <label>À partir du <input type="date" id="f-date-gte" /></label>
-          <label>Jusqu'au <input type="date" id="f-date-lte" /></label>
-          <label>Année exacte <input type="number" id="f-year" placeholder="2021" /></label>
+          <legend id="fs-dates-legend">Release dates</legend>
+          <label>From <input type="date" id="f-date-gte" /></label>
+          <label>To <input type="date" id="f-date-lte" /></label>
+          <label>Exact year <input type="number" id="f-year" placeholder="2021" /></label>
         </fieldset>
 
         <fieldset>
-          <legend>Note (vote average)</legend>
+          <legend>Rating</legend>
           <div class="range-row">
             <input type="number" id="f-vote-gte" min="0" max="10" step="0.5" placeholder="min" />
             <input type="number" id="f-vote-lte" min="0" max="10" step="0.5" placeholder="max" />
           </div>
-          <label>Nb de votes min <input type="number" id="f-votecount-gte" placeholder="ex: 100" /></label>
+          <label>Min vote count <input type="number" id="f-votecount-gte" placeholder="e.g. 100" /></label>
         </fieldset>
 
         <fieldset>
-          <legend>Durée (minutes)</legend>
+          <legend>Runtime (minutes)</legend>
           <div class="range-row">
             <input type="number" id="f-runtime-gte" placeholder="min" />
             <input type="number" id="f-runtime-lte" placeholder="max" />
@@ -86,87 +86,87 @@
         </fieldset>
 
         <fieldset>
-          <legend>Langue & origine</legend>
-          <label>Langue originale
+          <legend>Language &amp; origin</legend>
+          <label>Original language
             <select id="f-language">
-              <option value="">Toutes</option>
-              <option value="en">Anglais</option>
-              <option value="fr">Français</option>
-              <option value="ja">Japonais</option>
-              <option value="ko">Coréen</option>
-              <option value="es">Espagnol</option>
-              <option value="de">Allemand</option>
-              <option value="it">Italien</option>
-              <option value="zh">Chinois</option>
+              <option value="">Any</option>
+              <option value="en">English</option>
+              <option value="fr">French</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="es">Spanish</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="zh">Chinese</option>
               <option value="hi">Hindi</option>
             </select>
           </label>
-          <label>Pays d'origine (ISO) <input type="text" id="f-origin-country" placeholder="ex: US, FR (= US ou FR)" /></label>
+          <label>Origin country (ISO) <input type="text" id="f-origin-country" placeholder="e.g. US, FR (= US or FR)" /></label>
         </fieldset>
 
         <fieldset id="fs-cert">
-          <legend>Certification (âge)</legend>
-          <label>Pays <input type="text" id="f-cert-country" placeholder="ex: FR / US" /></label>
+          <legend>Age certification</legend>
+          <label>Country <input type="text" id="f-cert-country" placeholder="e.g. US / FR" /></label>
           <div class="range-row">
-            <input type="text" id="f-cert-gte" placeholder="min (ex: 12)" />
-            <input type="text" id="f-cert-lte" placeholder="max (ex: 16)" />
+            <input type="text" id="f-cert-gte" placeholder="min (e.g. PG-13)" />
+            <input type="text" id="f-cert-lte" placeholder="max (e.g. R)" />
           </div>
         </fieldset>
 
         <fieldset id="fs-people">
-          <legend>Personnes (acteurs / réal.)</legend>
-          <input type="text" id="f-person-search" placeholder="Chercher une personne…" />
+          <legend>People (cast &amp; crew)</legend>
+          <input type="text" id="f-person-search" placeholder="Search for a person…" />
           <div id="f-person-results" class="autocomplete"></div>
           <div id="f-person-selected" class="chips selected"></div>
         </fieldset>
 
         <fieldset>
-          <legend>Mots-clés</legend>
+          <legend>Keywords</legend>
           <input type="text" id="f-keyword-search" placeholder="ex: superhero…" />
           <div id="f-keyword-results" class="autocomplete"></div>
           <div id="f-keyword-selected" class="chips selected"></div>
         </fieldset>
 
         <fieldset>
-          <legend>Sociétés de production</legend>
+          <legend>Production companies</legend>
           <input type="text" id="f-company-search" placeholder="ex: Marvel Studios…" />
           <div id="f-company-results" class="autocomplete"></div>
           <div id="f-company-selected" class="chips selected"></div>
         </fieldset>
 
         <fieldset>
-          <legend>Plateformes de streaming</legend>
+          <legend>Streaming providers</legend>
           <div id="f-providers" class="chips"></div>
           <label>Type
             <select id="f-monetization">
-              <option value="">Tous</option>
-              <option value="flatrate">Abonnement</option>
-              <option value="free">Gratuit</option>
-              <option value="ads">Avec pub</option>
-              <option value="rent">Location</option>
-              <option value="buy">Achat</option>
+              <option value="">All</option>
+              <option value="flatrate">Subscription</option>
+              <option value="free">Free</option>
+              <option value="ads">With ads</option>
+              <option value="rent">Rent</option>
+              <option value="buy">Buy</option>
             </select>
           </label>
         </fieldset>
 
-        <label class="checkbox"><input type="checkbox" id="f-adult" /> Inclure contenu adulte</label>
+        <label class="checkbox"><input type="checkbox" id="f-adult" /> Include adult content</label>
       </section>
 
       <div class="actions">
-        <button id="btn-search" class="primary">Rechercher</button>
-        <button id="btn-reset">Réinitialiser</button>
+        <button id="btn-search" class="primary">Search</button>
+        <button id="btn-reset">Reset</button>
       </div>
       <div class="actions">
-        <button id="btn-create-list">Créer une liste auto</button>
-        <button id="btn-manage-lists">Mes listes</button>
+        <button id="btn-create-list">Create auto-list</button>
+        <button id="btn-manage-lists">My lists</button>
       </div>
     </aside>
 
     <!-- ===================== Results ===================== -->
     <main>
       <div class="results-toolbar">
-        <label class="checkbox"><input type="checkbox" id="hide-owned" /> <span id="hide-owned-label">Masquer les films déjà dans Radarr</span></label>
-        <label class="inline">Par page
+        <label class="checkbox"><input type="checkbox" id="hide-owned" /> <span id="hide-owned-label">Hide movies already in Radarr</span></label>
+        <label class="inline">Per page
           <select id="page-size">
             <option value="20">20</option>
             <option value="40">40</option>
@@ -177,11 +177,11 @@
         </label>
       </div>
       <div id="selection-bar" class="selection-bar hidden">
-        <span id="selection-count">0 sélectionné(s)</span>
+        <span id="selection-count">0 selected</span>
         <div class="selection-actions">
-          <button id="select-all">Tout sélectionner</button>
-          <button id="select-none">Tout désélectionner</button>
-          <button id="add-selection" class="primary" disabled>+ Ajouter la sélection</button>
+          <button id="select-all">Select all</button>
+          <button id="select-none">Clear selection</button>
+          <button id="add-selection" class="primary" disabled>+ Add selection</button>
         </div>
       </div>
       <div id="assistant-banner" class="assistant-banner hidden"></div>
@@ -195,21 +195,21 @@
   <div id="modal" class="modal hidden">
     <div class="modal-content">
       <h3 id="modal-title"></h3>
-      <label>Profil de qualité <select id="modal-profile"></select></label>
-      <label>Dossier racine <select id="modal-folder"></select></label>
-      <label id="modal-availability-row">Disponibilité minimale
+      <label>Quality profile <select id="modal-profile"></select></label>
+      <label>Root folder <select id="modal-folder"></select></label>
+      <label id="modal-availability-row">Minimum availability
         <select id="modal-availability">
-          <option value="announced">Annoncé</option>
-          <option value="inCinemas">En salle</option>
-          <option value="released" selected>Sorti</option>
+          <option value="announced">Announced</option>
+          <option value="inCinemas">In cinemas</option>
+          <option value="released" selected>Released</option>
         </select>
       </label>
-      <label class="checkbox"><input type="checkbox" id="modal-monitor" checked /> Surveiller</label>
-      <label class="checkbox" id="modal-collection-row" hidden><input type="checkbox" id="modal-collection" /> Ajouter toute la collection <span id="modal-collection-name" class="muted"></span></label>
-      <label class="checkbox"><input type="checkbox" id="modal-searchnow" checked /> Lancer la recherche maintenant</label>
+      <label class="checkbox"><input type="checkbox" id="modal-monitor" checked /> Monitor</label>
+      <label class="checkbox" id="modal-collection-row" hidden><input type="checkbox" id="modal-collection" /> Add the whole collection <span id="modal-collection-name" class="muted"></span></label>
+      <label class="checkbox"><input type="checkbox" id="modal-searchnow" checked /> Search on add</label>
       <div class="actions">
-        <button id="modal-add" class="primary">Ajouter à Radarr</button>
-        <button id="modal-cancel">Annuler</button>
+        <button id="modal-add" class="primary">Add to Radarr</button>
+        <button id="modal-cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -217,7 +217,7 @@
   <!-- Details modal -->
   <div id="detail-modal" class="modal hidden">
     <div class="detail-content">
-      <button id="detail-close" class="detail-close" aria-label="Fermer">✕</button>
+      <button id="detail-close" class="detail-close" aria-label="Close">✕</button>
       <div id="detail-body"></div>
     </div>
   </div>
@@ -225,27 +225,27 @@
   <!-- Create auto-list modal -->
   <div id="list-modal" class="modal hidden">
     <div class="modal-content">
-      <h3>Créer une liste automatique</h3>
+      <h3>Create an auto-list</h3>
       <div id="list-summary" class="muted"></div>
-      <label>Nom de la liste <input type="text" id="list-name" placeholder="ex: Horreur années 80" /></label>
-      <label>Profil de qualité <select id="list-profile"></select></label>
-      <label>Dossier racine <select id="list-folder"></select></label>
-      <label id="list-availability-row">Disponibilité minimale
+      <label>List name <input type="text" id="list-name" placeholder="e.g. 80s horror" /></label>
+      <label>Quality profile <select id="list-profile"></select></label>
+      <label>Root folder <select id="list-folder"></select></label>
+      <label id="list-availability-row">Minimum availability
         <select id="list-availability">
-          <option value="announced">Annoncé</option>
-          <option value="inCinemas">En salle</option>
-          <option value="released" selected>Sorti</option>
+          <option value="announced">Announced</option>
+          <option value="inCinemas">In cinemas</option>
+          <option value="released" selected>Released</option>
         </select>
       </label>
-      <label>Pages TMDB scannées par passage (≈20 médias/page)
+      <label>TMDB pages scanned per run (≈20 titles/page)
         <input type="number" id="list-maxpages" min="1" max="10" value="3" />
       </label>
-      <label class="checkbox"><input type="checkbox" id="list-monitor" checked /> Surveiller</label>
-      <label class="checkbox"><input type="checkbox" id="list-searchnow" checked /> Lancer la recherche à l'ajout</label>
+      <label class="checkbox"><input type="checkbox" id="list-monitor" checked /> Monitor</label>
+      <label class="checkbox"><input type="checkbox" id="list-searchnow" checked /> Search on add</label>
       <div class="actions">
-        <button id="list-save" class="primary">Enregistrer la liste</button>
-        <button id="list-preview">Aperçu</button>
-        <button id="list-cancel">Annuler</button>
+        <button id="list-save" class="primary">Save list</button>
+        <button id="list-preview">Preview</button>
+        <button id="list-cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -253,9 +253,9 @@
   <!-- Preview modal -->
   <div id="preview-modal" class="modal hidden">
     <div class="detail-content">
-      <button id="preview-close" class="detail-close" aria-label="Fermer">✕</button>
+      <button id="preview-close" class="detail-close" aria-label="Close">✕</button>
       <div class="lists-wrap">
-        <h2 id="preview-title">Aperçu</h2>
+        <h2 id="preview-title">Preview</h2>
         <div id="preview-summary" class="muted"></div>
         <div id="preview-grid" class="grid"></div>
       </div>
@@ -265,10 +265,10 @@
   <!-- Lists manager modal -->
   <div id="lists-modal" class="modal hidden">
     <div class="detail-content">
-      <button id="lists-close" class="detail-close" aria-label="Fermer">✕</button>
+      <button id="lists-close" class="detail-close" aria-label="Close">✕</button>
       <div class="lists-wrap">
-        <h2>Mes listes automatiques</h2>
-        <p class="muted">Rescannées toutes les 12h (et au démarrage). Les nouveaux médias correspondant aux filtres sont ajoutés automatiquement à Radarr (films) ou Sonarr (séries).</p>
+        <h2>My auto-lists</h2>
+        <p class="muted">Re-scanned every 12h (and on startup). New titles matching the filters are added to Radarr (movies) or Sonarr (TV shows) automatically.</p>
         <div id="lists-body"></div>
       </div>
     </div>
@@ -277,43 +277,44 @@
   <!-- Spoken summary modal -->
   <div id="summary-modal" class="modal hidden">
     <div class="modal-content">
-      <button id="summary-close" class="detail-close" aria-label="Fermer">✕</button>
-      <h3 id="summary-title">Résumé</h3>
+      <button id="summary-close" class="detail-close" aria-label="Close">✕</button>
+      <h3 id="summary-title">Summary</h3>
       <div id="summary-orb" class="summary-orb">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
       </div>
       <div id="summary-text" class="summary-text"></div>
-      <label class="summary-voice-row">Voix
+      <label class="summary-voice-row">Voice
         <select id="summary-voice"></select>
       </label>
       <div class="actions">
-        <button id="summary-replay">Réécouter</button>
+        <button id="summary-replay">Replay</button>
         <button id="summary-stop">Stop</button>
       </div>
     </div>
   </div>
 
   <!-- Voice assistant (Mistral AI) -->
-  <button id="assistant-fab" class="assistant-fab hidden" aria-label="Assistant vocal" title="Assistant vocal IA">
+  <button id="assistant-fab" class="assistant-fab hidden" aria-label="Voice assistant" title="AI voice assistant">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21.5"/></svg>
   </button>
   <div id="assistant-overlay" class="modal hidden">
     <div class="assistant-card">
-      <button id="assistant-close" class="detail-close" aria-label="Fermer">✕</button>
+      <button id="assistant-close" class="detail-close" aria-label="Close">✕</button>
       <div id="assistant-orb" class="assistant-orb">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="21.5"/></svg>
       </div>
-      <div id="assistant-status" class="assistant-status">Appuyez sur le micro et parlez…</div>
+      <div id="assistant-status" class="assistant-status">Tap the mic and speak…</div>
       <div id="assistant-transcript" class="assistant-transcript"></div>
       <div class="assistant-controls">
-        <button id="assistant-talk" class="primary">Parler</button>
+        <button id="assistant-talk" class="primary">Speak</button>
       </div>
-      <input id="assistant-text" type="text" placeholder="…ou tapez votre demande puis Entrée" />
+      <input id="assistant-text" type="text" placeholder="…or type your request and hit Enter" />
       <div id="assistant-reply" class="assistant-reply"></div>
-      <div class="assistant-hint">Ex : « des films d'horreur des années 80 », « des séries comme Breaking Bad », « je ne sais pas quoi regarder ce soir »</div>
+      <div class="assistant-hint">Try: “80s horror movies”, “shows like Breaking Bad”, “I don't know what to watch tonight”</div>
     </div>
   </div>
 
-  <script src="/app.js?v=22"></script>
+  <script src="/i18n.js?v=23"></script>
+  <script src="/app.js?v=23"></script>
 </body>
 </html>

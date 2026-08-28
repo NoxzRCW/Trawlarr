@@ -1,9 +1,9 @@
 """Async client for the Mistral AI chat completions API.
 
-Used by the natural-language assistant: it turns a French request ("trouve-moi
-des films d'horreur des années 80", "des séries comme Breaking Bad") into a
-structured plan (TMDB discover filters or a list of suggested titles) that the
-app then applies on the user's behalf.
+Used by the natural-language assistant: it turns a plain request ("find me
+some 80s horror movies", "shows like Breaking Bad") into a structured plan
+(TMDB discover filters, or a list of suggested titles) that the app then
+applies on the user's behalf.
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class MistralClient:
 
     async def chat_text(self, system: str, user: str, temperature: float = 0.5) -> str:
         if not self.api_key:
-            raise MistralError("MISTRAL_API_KEY non configurée sur le serveur.")
+            raise MistralError("MISTRAL_API_KEY is not configured on the server.")
         body = {
             "model": self.model,
             "messages": [
@@ -46,11 +46,11 @@ class MistralClient:
         try:
             return resp.json()["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError) as e:
-            raise MistralError(f"Réponse de l'IA illisible : {e}")
+            raise MistralError(f"Unreadable AI response: {e}")
 
     async def chat_json(self, system: str, user: str) -> dict[str, Any]:
         if not self.api_key:
-            raise MistralError("MISTRAL_API_KEY non configurée sur le serveur.")
+            raise MistralError("MISTRAL_API_KEY is not configured on the server.")
         body = {
             "model": self.model,
             "messages": [
@@ -70,7 +70,7 @@ class MistralClient:
             content = data["choices"][0]["message"]["content"]
             return json.loads(content)
         except (KeyError, IndexError, json.JSONDecodeError) as e:
-            raise MistralError(f"Réponse de l'IA illisible : {e}")
+            raise MistralError(f"Unreadable AI response: {e}")
 
 
 mistral = MistralClient(settings.mistral_api_key, settings.mistral_model)
