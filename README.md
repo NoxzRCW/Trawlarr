@@ -8,7 +8,8 @@ Every TMDB Discover filter in front of your \*arr stack — plus saved searches 
 keep adding new releases on their own, and an assistant you can just talk to.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Docker](https://img.shields.io/badge/docker-one%20container-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
+[![Docker image](https://img.shields.io/badge/ghcr.io-noxzrcw%2Ftrawlarr-2496ED?style=flat-square&logo=docker&logoColor=white)](https://github.com/NoxzRCW/Trawlarr/pkgs/container/trawlarr)
+[![Build](https://img.shields.io/github/actions/workflow/status/NoxzRCW/Trawlarr/docker.yml?branch=main&style=flat-square&label=build)](https://github.com/NoxzRCW/Trawlarr/actions/workflows/docker.yml)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](requirements.txt)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Radarr](https://img.shields.io/badge/Radarr-ready-FFC230?style=flat-square)](https://radarr.video/)
@@ -78,25 +79,26 @@ decide without reading three paragraphs.
 ## Quick start
 
 ```bash
-git clone https://github.com/NoxzRCW/Trawlarr.git
-cd Trawlarr
-cp .env.example .env
-$EDITOR .env          # TMDB_API_KEY + your Radarr / Sonarr URL and API key
-docker compose up -d
-```
-
-Open **http://localhost:8080**. That is the whole install.
-
-<details>
-<summary>Prefer a plain <code>docker run</code>?</summary>
-
-```bash
 docker run -d --name trawlarr -p 8080:8080 \
   -e TMDB_API_KEY=xxxxx \
   -e RADARR_URL=http://radarr:7878 -e RADARR_API_KEY=xxxxx \
   -e SONARR_URL=http://sonarr:8989 -e SONARR_API_KEY=xxxxx \
   -v ./data:/data \
   ghcr.io/noxzrcw/trawlarr:latest
+```
+
+Open **http://localhost:8080**. That is the whole install — the image is prebuilt
+for `amd64`, nothing to compile.
+
+<details>
+<summary>Prefer docker compose, or want to build it yourself?</summary>
+
+```bash
+git clone https://github.com/NoxzRCW/Trawlarr.git
+cd Trawlarr
+cp .env.example .env
+$EDITOR .env          # TMDB_API_KEY + your Radarr / Sonarr URL and API key
+docker compose up -d
 ```
 
 </details>
