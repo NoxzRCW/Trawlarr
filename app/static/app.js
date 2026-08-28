@@ -161,7 +161,7 @@ async function loadHealth() {
       `${ver ? `<span class="ver">${ver}</span>` : ""}</span>`;
     $("#health").innerHTML =
       svc("TMDB", h.tmdb) + svc("Radarr", h.radarr, h.radarr_version) + svc("Sonarr", h.sonarr, h.sonarr_version);
-  } catch (e) { $("#health").textContent = "Connexion impossible"; }
+  } catch (e) { $("#health").textContent = tr("Connection failed"); }
 }
 
 async function loadGenres() {
@@ -333,13 +333,13 @@ function newSearch() {
 }
 
 async function search() {
-  $("#status").textContent = "Recherche…";
+  $("#status").textContent = tr("Searching…");
   renderSkeletons(Math.min(state.pageSize, 10));
   try {
     let data;
     if (state.mode === "search") {
       const q = val("#q-text");
-      if (!q) { $("#status").textContent = "Saisissez un titre."; return; }
+      if (!q) { $("#status").textContent = tr("Enter a title."); return; }
       const params = new URLSearchParams({ query: q, cursor: state.cursor });
       if (val("#q-year")) params.set("year", val("#q-year"));
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
@@ -545,7 +545,7 @@ async function confirmAdd() {
 
   const btn = $("#modal-add");
   const lib = libName();
-  btn.disabled = true; btn.textContent = "Ajout…";
+  btn.disabled = true; btn.textContent = tr("Adding…");
   const addCollection = !isTv() && !$("#modal-collection-row").hidden && $("#modal-collection").checked;
   try {
     const res = await api(paths().add, {
@@ -618,7 +618,7 @@ const fmtDate = (s) => {
   return isNaN(d) ? s : d.toLocaleDateString(uiLocale(), { day: "numeric", month: "long", year: "numeric" });
 };
 const fmtMoney = (n) => (n ? "$" + n.toLocaleString(uiLocale()) : null);
-const fmtBool = (b) => (b ? "Oui" : "Non");
+const fmtBool = (b) => (b ? tr("Yes") : tr("No"));
 
 function detailSection(title) {
   const s = el("div", "detail-section");
@@ -637,7 +637,7 @@ async function openDetails(m, mediaType) {
   const tv = mediaType ? mediaType === "tv" : isTv();
   const modal = $("#detail-modal");
   const body = $("#detail-body");
-  body.innerHTML = `<div class="detail-loading">Chargement…</div>`;
+  body.innerHTML = `<div class="detail-loading">${tr("Loading…")}</div>`;
   modal.classList.remove("hidden");
   modal.scrollTop = 0;
   try {
@@ -816,7 +816,7 @@ function renderDetails(d, tv) {
   const prov = (d["watch/providers"]?.results || {})[region];
   if (prov) {
     const s = detailSection(`${tr("Where to watch")} (${region})`);
-    const groups = [["flatrate", "Abonnement"], ["free", "Gratuit"], ["ads", "Avec pub"],
+    const groups = [["flatrate", "Abonnement"], ["free", tr("Free")], ["ads", tr("With ads")],
       ["rent", "Location"], ["buy", "Achat"]];
     groups.forEach(([key, label]) => {
       if ((prov[key] || []).length) {
@@ -887,7 +887,7 @@ function renderDetails(d, tv) {
   }
 
   // Recommendations & similar
-  addMiniRow(inner, "Recommandations", d.recommendations?.results, tv);
+  addMiniRow(inner, tr("Recommendations"), d.recommendations?.results, tv);
   addMiniRow(inner, tr("Similar titles"), d.similar?.results, tv);
 
   // Images
@@ -942,7 +942,7 @@ function externalLinks(d, tv) {
   const imdb = d.imdb_id || ext.imdb_id;
   if (imdb) out.push(["IMDb", `https://www.imdb.com/title/${imdb}`]);
   if (ext.tvdb_id) out.push(["TheTVDB", `https://thetvdb.com/?id=${ext.tvdb_id}&tab=series`]);
-  if (d.homepage) out.push(["Site officiel", d.homepage]);
+  if (d.homepage) out.push([tr("Official site"), d.homepage]);
   if (ext.facebook_id) out.push(["Facebook", `https://facebook.com/${ext.facebook_id}`]);
   if (ext.instagram_id) out.push(["Instagram", `https://instagram.com/${ext.instagram_id}`]);
   if (ext.twitter_id) out.push(["Twitter / X", `https://twitter.com/${ext.twitter_id}`]);
@@ -980,7 +980,7 @@ function setReply(t, err) {
 
 function openAssistant() {
   $("#assistant-overlay").classList.remove("hidden");
-  setAssistantStatus("Appuyez sur le micro et parlez…");
+  setAssistantStatus(tr("Tap the mic and speak…"));
   $("#assistant-transcript").textContent = "";
   setReply("");
   setOrb("");
@@ -1106,7 +1106,7 @@ async function askAssistant(text) {
       body: JSON.stringify({ text }),
     });
     setOrb("");
-    setReply(plan.explanation || "C'est parti !");
+    setReply(plan.explanation || tr("Here we go!"));
     await applyPlan(plan);
     setAssistantStatus(tr("Done") + " ✓");
     speak(plan.spoken || plan.explanation);
@@ -1199,7 +1199,7 @@ function renderAssistantTitles(plan) {
   $("#pagination").innerHTML = "";
   const noun = isTv() ? tr("TV shows") : tr("movies");
   $("#status").textContent = `${results.length} ${noun} ${tr("suggested")}`;
-  showAssistantBanner(plan.explanation || "Suggestions de l'IA");
+  showAssistantBanner(plan.explanation || tr("AI suggestions"));
 }
 
 function showAssistantBanner(text) {
@@ -1221,18 +1221,18 @@ function genreName(id) {
 function describeFilters(f) {
   if (!f) return "";
   const parts = [];
-  if (f.sort_by) parts.push("tri " + f.sort_by);
-  if (f.with_genres) parts.push("genres " + f.with_genres.split(",").map(genreName).join("/"));
-  if (f.without_genres) parts.push("sauf " + f.without_genres.split(",").map(genreName).join("/"));
+  if (f.sort_by) parts.push(tr("sort") + " " + f.sort_by);
+  if (f.with_genres) parts.push(tr("genres") + " " + f.with_genres.split(",").map(genreName).join("/"));
+  if (f.without_genres) parts.push(tr("except") + " " + f.without_genres.split(",").map(genreName).join("/"));
   const dg = f["primary_release_date.gte"] || f["first_air_date.gte"];
   const dl = f["primary_release_date.lte"] || f["first_air_date.lte"];
-  if (dg) parts.push("depuis " + dg);
+  if (dg) parts.push(tr("from") + " " + dg);
   if (dl) parts.push(tr("until") + " " + dl);
   if (f.primary_release_year || f.first_air_date_year) parts.push(tr("year") + " " + (f.primary_release_year || f.first_air_date_year));
-  if (f["vote_average.gte"]) parts.push("note ≥ " + f["vote_average.gte"]);
+  if (f["vote_average.gte"]) parts.push(tr("rating ≥") + " " + f["vote_average.gte"]);
   if (f["vote_count.gte"]) parts.push("votes ≥ " + f["vote_count.gte"]);
-  if (f.with_original_language) parts.push("langue " + f.with_original_language);
-  if (f.with_origin_country) parts.push("pays " + f.with_origin_country);
+  if (f.with_original_language) parts.push(tr("language") + " " + f.with_original_language);
+  if (f.with_origin_country) parts.push(tr("country") + " " + f.with_origin_country);
   if (f.with_watch_providers) parts.push("plateformes");
   return parts.join(" · ");
 }
@@ -1358,7 +1358,7 @@ async function previewList(media, filters, maxPages, label) {
   const m = $("#preview-modal");
   m.classList.remove("hidden");
   $("#preview-title").textContent = tr("Preview") + " — " + (label || "");
-  $("#preview-summary").textContent = "Analyse en cours…";
+  $("#preview-summary").textContent = tr("Scanning…");
   $("#preview-grid").innerHTML = "";
   try {
     const d = await api("/lists/preview", {
@@ -1398,7 +1398,7 @@ async function previewList(media, filters, maxPages, label) {
 
 async function openLists() {
   $("#lists-modal").classList.remove("hidden");
-  $("#lists-body").innerHTML = "<p class='muted'>Chargement…</p>";
+  $("#lists-body").innerHTML = `<p class='muted'>${tr("Loading…")}</p>`;
   try {
     renderLists(await api("/lists"));
   } catch (e) {
@@ -1418,12 +1418,12 @@ function renderLists(lists) {
     const head = el("div", "lc-head");
     head.appendChild(el("span", "lc-name", l.name));
     head.appendChild(el("span", "list-badge", l.media === "tv" ? tr("TV shows") : tr("Movies")));
-    head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? "Active" : "En pause"));
+    head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? tr("Active") : tr("Paused")));
     card.appendChild(head);
 
     const meta = el("div", "lc-meta");
     meta.innerHTML =
-      `Filtres : <span class="lc-filters">${describeFilters(l.filters) || "aucun (tout)"}</span><br>` +
+      `${tr("Filters")}: <span class="lc-filters">${describeFilters(l.filters) || tr("none (all)")}</span><br>` +
       `${l.max_pages} ${tr("pages scanned")} · ${tr("last run")}: ${l.last_run ? new Date(l.last_run).toLocaleString() : tr("never")} · ${tr("total added")}: ${l.total_added || 0}`;
     card.appendChild(meta);
 
@@ -1438,15 +1438,15 @@ function renderLists(lists) {
     }
 
     const actions = el("div", "lc-actions");
-    const run = el("button", "primary", "Lancer maintenant");
+    const run = el("button", "primary", tr("Run now"));
     run.onclick = () => runListNow(l.id, run);
     const prev = el("button", null, tr("Preview"));
     prev.onclick = () => previewList(l.media, l.filters, l.max_pages, l.name);
-    const edit = el("button", null, "Modifier");
+    const edit = el("button", null, tr("Edit"));
     edit.onclick = () => openEditList(l);
-    const toggle = el("button", null, l.enabled ? "Mettre en pause" : "Activer");
+    const toggle = el("button", null, l.enabled ? tr("Pause") : tr("Enable"));
     toggle.onclick = () => toggleList(l);
-    const del = el("button", null, "Supprimer");
+    const del = el("button", null, tr("Delete"));
     del.onclick = () => deleteList(l.id);
     actions.append(run, prev, edit, toggle, del);
     card.appendChild(actions);
@@ -1455,14 +1455,14 @@ function renderLists(lists) {
 }
 
 async function runListNow(id, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = "Scan en cours…"; }
+  if (btn) { btn.disabled = true; btn.textContent = tr("Scanning…"); }
   try {
     const r = await api(`/lists/${id}/run`, { method: "POST" });
     toast(r.error ? tr("Error") + ": " + r.error : `${r.added} ${tr("added")}, ${r.skipped} ${tr("already there")}`, !r.error);
     renderLists(await api("/lists"));
   } catch (e) {
     toast(tr("Failed") + ": " + e.message, false);
-    if (btn) { btn.disabled = false; btn.textContent = "Lancer maintenant"; }
+    if (btn) { btn.disabled = false; btn.textContent = tr("Run now"); }
   }
 }
 
@@ -1664,7 +1664,7 @@ function bindUI() {
   $("#list-save").onclick = saveList;
   $("#list-preview").onclick = () =>
     previewList(state.listModalMedia, state.pendingListFilters,
-      Number($("#list-maxpages").value) || 3, $("#list-name").value.trim() || "nouvelle liste");
+      Number($("#list-maxpages").value) || 3, $("#list-name").value.trim() || tr("new list"));
   $("#list-cancel").onclick = () => $("#list-modal").classList.add("hidden");
   $("#preview-close").onclick = () => $("#preview-modal").classList.add("hidden");
   $("#preview-modal").addEventListener("click", (e) => {

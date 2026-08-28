@@ -135,12 +135,12 @@ made server-side; the frontend only ever talks to this container.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/03-results.jpg" alt="Filtered results"><br><sub><b>Filtered results</b> — already-owned titles are flagged and can be hidden</sub></td>
+<td width="50%"><img src="docs/03-results.jpg" alt="Filtered results"><br><sub><b>Filters live in a drawer</b> so the posters get the full width; owned titles are flagged</sub></td>
 <td width="50%"><img src="docs/08-details.jpg" alt="Title details"><br><sub><b>Full TMDB detail sheet</b> — cast, crew, trailers, where to watch, similar titles</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/04-autolist.jpg" alt="Creating an auto-list"><br><sub><b>Any search becomes a list</b> that keeps feeding your library</sub></td>
-<td width="50%"><img src="docs/01-home.jpg" alt="Home"><br><sub><b>Movies or TV shows</b> — one switch flips the whole interface</sub></td>
+<td width="50%"><img src="docs/03b-hover.jpg" alt="Hover actions"><br><sub><b>Actions live on the artwork</b> — details, spoken summary and add, on hover</sub></td>
 </tr>
 </table>
 
