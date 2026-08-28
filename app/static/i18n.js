@@ -203,6 +203,7 @@ const LOCALES = {
     "In production": "En production",
     "Cast": "Distribution",
     "Reviews": "Avis",
+    "Filters": "Filtres",
     // --- generic
     "Failed": "Échec",
     "Error": "Erreur",

@@ -1553,8 +1553,30 @@ function setupMobileFilters() {
     if (filters.classList.contains("open")) close(); else open();
   };
   backdrop.onclick = close;
-  // Expose for closing the drawer after launching a search on mobile.
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   state.closeFilters = close;
+
+  // The media switch belongs in the top bar, not buried in the drawer.
+  const media = filters.querySelector(".media-switch");
+  const header = document.querySelector("header");
+  if (media && header) header.insertBefore(media, header.querySelector(".health"));
+
+  updateFilterCount();
+}
+
+// Badge on the Filters button: how many filters are actually narrowing the search.
+function updateFilterCount() {
+  const toggle = $("#filter-toggle");
+  if (!toggle) return;
+  let n = 0;
+  document.querySelectorAll("#panel-discover input, #panel-discover select").forEach((f) => {
+    if (f.type === "checkbox") { if (f.checked) n++; }
+    else if (f.id !== "f-sort" && f.value && f.value.trim()) n++;
+  });
+  n += document.querySelectorAll("#f-genres .chip.include, #f-genres .chip.exclude").length;
+  n += document.querySelectorAll("#f-providers .chip.include").length;
+  n += document.querySelectorAll(".chips.selected .chip").length;
+  toggle.dataset.count = String(n);
 }
 
 async function switchMedia(media) {
@@ -1614,8 +1636,8 @@ function bindUI() {
   };
   $("#add-selection").onclick = openBulkModal;
 
-  $("#btn-search").onclick = newSearch;
-  $("#btn-reset").onclick = resetFilters;
+  $("#btn-search").onclick = () => { updateFilterCount(); newSearch(); };
+  $("#btn-reset").onclick = () => { resetFilters(); updateFilterCount(); };
   $("#q-text").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
   $("#q-year").addEventListener("keydown", (e) => { if (e.key === "Enter") newSearch(); });
 
