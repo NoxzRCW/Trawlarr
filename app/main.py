@@ -25,6 +25,10 @@ from .store import store
 from .tmdb import IMAGE_BASE, TMDBError, tmdb
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+# httpx logs every request at INFO, full URL included — and TMDB takes its key as
+# a query parameter, so that would print the user's API key into the container
+# logs on every single call.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("trawlarr")
 
 
