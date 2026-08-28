@@ -38,6 +38,8 @@ const state = {
   pageSize: (typeof localStorage !== "undefined" && Number(localStorage.getItem("pageSize"))) || 20,
   selected: new Map(),   // tmdb id -> movie (current selection for bulk add)
   currentResults: [],    // movies shown on the current page
+  searchToken: 0,        // incremented per search; a stale response is discarded
+  uiBound: false,        // bindUI() must run exactly once
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -48,8 +50,24 @@ const el = (tag, cls, txt) => {
   return e;
 };
 
+// Fill a <select> with real Option nodes. `pick` returns [value, label]; the
+// label is set as text, so values coming from Radarr/Sonarr are never parsed
+// as HTML.
+function fillOptions(select, items, pick) {
+  select.textContent = "";
+  (items || []).forEach((item) => {
+    const [value, label] = pick(item);
+    const option = new Option();
+    option.value = value;
+    option.textContent = label;
+    select.appendChild(option);
+  });
+}
+
 function toast(msg, ok = true) {
   const t = el("div", `toast ${ok ? "ok" : "err"}`, msg);
+  // Screen readers: a success is a polite status, a failure interrupts.
+  t.setAttribute("role", ok ? "status" : "alert");
   document.body.appendChild(t);
   // Animate out before removing from the DOM.
   setTimeout(() => {
@@ -152,24 +170,50 @@ async function init() {
 }
 
 async function loadHealth() {
+  // /api/health always answers 200 and reports each service separately, so a
+  // failure here means Trawlarr itself is unreachable — that alone deserves a
+  // global message. A single service being down just greys out its own dot.
+  let h;
   try {
-    const h = await api("/health");
-    // Each service: status dot + name + (version on desktop only).
-    const svc = (name, ok, ver) =>
-      `<span class="svc" title="${ver || (ok ? "OK" : "indisponible")}">` +
-      `<span class="dot ${ok ? "ok" : "ko"}"></span>${name}` +
-      `${ver ? `<span class="ver">${ver}</span>` : ""}</span>`;
-    $("#health").innerHTML =
-      svc("TMDB", h.tmdb) + svc("Radarr", h.radarr, h.radarr_version) + svc("Sonarr", h.sonarr, h.sonarr_version);
-  } catch (e) { $("#health").textContent = tr("Connection failed"); }
+    h = await api("/health");
+  } catch (e) {
+    $("#health").textContent = tr("Connection failed");
+    return;
+  }
+  // Each service: status dot + name + (version on desktop only).
+  // Built as nodes, never as HTML: `ver` and `err` are strings a remote service
+  // (or its unreachable address) gave us.
+  const svc = (name, ok, ver, err) => {
+    const s = el("span", "svc");
+    s.setAttribute("title", ver ? String(ver) : ok ? "OK" : String(err || tr("unavailable")));
+    s.appendChild(el("span", "dot " + (ok ? "ok" : "ko")));
+    s.appendChild(document.createTextNode(name));
+    if (ver) s.appendChild(el("span", "ver", String(ver)));
+    return s;
+  };
+  const health = $("#health");
+  health.textContent = "";
+  health.append(
+    svc("TMDB", h.tmdb, null, h.tmdb_error),
+    svc("Radarr", h.radarr, h.radarr_version, h.radarr_error),
+    svc("Sonarr", h.sonarr, h.sonarr_version, h.sonarr_error),
+  );
 }
 
+// A TMDB outage must never take down init(): each loader keeps its own list
+// empty and logs, so Promise.all() below can no longer reject.
 async function loadGenres() {
   state.genres.clear();
-  const { genres } = await api(paths().genres);
   const box = $("#f-genres");
   box.innerHTML = "";
-  genres.forEach((g) => {
+  let genres;
+  try {
+    ({ genres } = await api(paths().genres));
+  } catch (e) {
+    console.warn("Genre list unavailable", e);
+    return;
+  }
+  (genres || []).forEach((g) => {
     const chip = el("span", "chip", g.name);
     chip.dataset.gid = g.id;
     chip.onclick = (ev) => {
@@ -191,9 +235,15 @@ async function loadGenres() {
 
 async function loadProviders() {
   state.providers.clear();
-  const { results } = await api(paths().providers);
   const box = $("#f-providers");
   box.innerHTML = "";
+  let results;
+  try {
+    ({ results } = await api(paths().providers));
+  } catch (e) {
+    console.warn("Watch provider list unavailable", e);
+    return;
+  }
   (results || []).slice(0, 25).forEach((p) => {
     const chip = el("span", "chip", p.provider_name);
     chip.onclick = () => {
@@ -213,10 +263,11 @@ async function loadLibraryOptions() {
   try {
     state.profiles = await api(paths().profiles);
     state.folders = await api(paths().folders);
-    $("#modal-profile").innerHTML = state.profiles
-      .map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
-    $("#modal-folder").innerHTML = state.folders
-      .map((f) => `<option value="${f.path}">${f.path} (${fmtBytes(f.freeSpace)} libres)</option>`).join("");
+    // Profile names and root folder paths come from Radarr/Sonarr: build real
+    // <option> nodes so nothing in them is ever parsed as HTML.
+    fillOptions($("#modal-profile"), state.profiles, (p) => [p.id, p.name]);
+    fillOptions($("#modal-folder"), state.folders,
+      (f) => [f.path, `${f.path} (${fmtBytes(f.freeSpace)} ${tr("free")})`]);
   } catch (e) {
     console.warn(`${libName()} options unavailable`, e);
   }
@@ -332,14 +383,20 @@ function newSearch() {
   search();
 }
 
+// Returns true when this call actually painted the page, false when it failed,
+// and null when a newer search superseded it (its result must be dropped).
 async function search() {
+  const token = ++state.searchToken;
   $("#status").textContent = tr("Searching…");
   renderSkeletons(Math.min(state.pageSize, 10));
   try {
     let data;
     if (state.mode === "search") {
       const q = val("#q-text");
-      if (!q) { $("#status").textContent = tr("Enter a title."); return; }
+      if (!q) {
+        if (token === state.searchToken) $("#status").textContent = tr("Enter a title.");
+        return false;
+      }
       const params = new URLSearchParams({ query: q, cursor: state.cursor });
       if (val("#q-year")) params.set("year", val("#q-year"));
       if ($("#q-adult-search").checked) params.set("include_adult", "true");
@@ -349,6 +406,9 @@ async function search() {
     } else {
       data = await api(`${paths().discover}?${buildDiscoverParams()}`);
     }
+    // The user clicked again while this request was in flight: another call
+    // owns the page now, so this response must not overwrite it.
+    if (token !== state.searchToken) return null;
     state.nextCursor = data.next_cursor ?? 0;
     state.hasMore = !!data.has_more;
     state.totalResults = data.total_results ?? (data.results || []).length;
@@ -360,8 +420,11 @@ async function search() {
       : `${state.totalResults} ${noun}`;
     $("#status").textContent = `${count} · page ${state.viewPage}`;
     renderPagination();
+    return true;
   } catch (e) {
+    if (token !== state.searchToken) return null;
     $("#status").textContent = tr("Error") + ": " + e.message;
+    return false;
   }
 }
 
@@ -455,23 +518,35 @@ function renderPagination() {
   box.innerHTML = "";
   const hasPrev = state.cursorStack.length > 0;
   if (!hasPrev && !state.hasMore) return;
-  const prev = el("button", null, "← " + tr("Previous"));
-  prev.disabled = !hasPrev;
-  prev.onclick = () => {
-    state.cursor = state.cursorStack.pop();
-    state.viewPage--;
-    search();
+  // Both buttons move the cursor optimistically, then roll the whole pagination
+  // state back if the request failed — otherwise a single network error left
+  // the stack out of sync and "Previous" skipped a page.
+  const navigate = (mutate) => {
+    const before = { cursor: state.cursor, viewPage: state.viewPage, stack: state.cursorStack.slice() };
+    mutate();
+    search().then((ok) => {
+      if (ok === false) {
+        state.cursor = before.cursor;
+        state.viewPage = before.viewPage;
+        state.cursorStack = before.stack;
+        renderPagination();
+      }
+    });
     window.scrollTo(0, 0);
   };
+  const prev = el("button", null, "← " + tr("Previous"));
+  prev.disabled = !hasPrev;
+  prev.onclick = () => navigate(() => {
+    state.cursor = state.cursorStack.pop();
+    state.viewPage--;
+  });
   const next = el("button", null, tr("Next") + " →");
   next.disabled = !state.hasMore;
-  next.onclick = () => {
+  next.onclick = () => navigate(() => {
     state.cursorStack.push(state.cursor);
     state.cursor = state.nextCursor;
     state.viewPage++;
-    search();
-    window.scrollTo(0, 0);
-  };
+  });
   box.appendChild(prev);
   box.appendChild(el("span", null, `Page ${state.viewPage}`));
   box.appendChild(next);
@@ -587,7 +662,7 @@ async function confirmBulkAdd() {
   const ownedKey = isTv() ? "in_sonarr" : "in_radarr";
   let ok = 0, fail = 0;
   for (let i = 0; i < movies.length; i++) {
-    btn.textContent = `Ajout… (${i + 1}/${movies.length})`;
+    btn.textContent = tr("Adding… ({i}/{n})", { i: i + 1, n: movies.length });
     try {
       await api(paths().add, {
         method: "POST",
@@ -645,7 +720,9 @@ async function openDetails(m, mediaType) {
     renderDetails(d, tv);
     $(".detail-content").scrollTop = 0;
   } catch (e) {
-    body.innerHTML = `<div class="detail-loading">${tr("Error")}: ${e.message}</div>`;
+    // e.message carries the upstream error body: set it as text, not HTML.
+    body.textContent = "";
+    body.appendChild(el("div", "detail-loading", tr("Error") + ": " + e.message));
   }
 }
 
@@ -816,8 +893,8 @@ function renderDetails(d, tv) {
   const prov = (d["watch/providers"]?.results || {})[region];
   if (prov) {
     const s = detailSection(`${tr("Where to watch")} (${region})`);
-    const groups = [["flatrate", "Abonnement"], ["free", tr("Free")], ["ads", tr("With ads")],
-      ["rent", "Location"], ["buy", "Achat"]];
+    const groups = [["flatrate", tr("Subscription")], ["free", tr("Free")], ["ads", tr("With ads")],
+      ["rent", tr("Rent")], ["buy", tr("Buy")]];
     groups.forEach(([key, label]) => {
       if ((prov[key] || []).length) {
         const g = el("div", "providers-group");
@@ -1023,9 +1100,8 @@ function populateVoiceSelect() {
   const sel = $("#summary-voice");
   if (!sel) return;
   const voices = ttsVoices();
-  sel.innerHTML = voices.length
-    ? voices.map((v) => `<option value="${v.voiceURI}">${v.name}</option>`).join("")
-    : `<option value="">(${tr("system default voice")})</option>`;
+  fillOptions(sel, voices.length ? voices : [{ voiceURI: "", name: `(${tr("system default voice")})` }],
+    (v) => [v.voiceURI, v.name]);
   const cur = selectedVoice();
   if (cur) { sel.value = cur.voiceURI; state.ttsVoiceURI = cur.voiceURI; }
 }
@@ -1266,8 +1342,10 @@ function fillListModal({ media, filters, profiles, folders, values, isEdit }) {
   $("#list-modal-title") && ($("#list-modal-title").textContent = "");
   $("#list-summary").textContent =
     `${tv ? tr("TV shows (Sonarr)") : tr("Movies (Radarr)")} · ${describeFilters(filters) || tr("no filter (everything)")}`;
-  $("#list-profile").innerHTML = profiles.map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
-  $("#list-folder").innerHTML = folders.map((f) => `<option value="${f.path}">${f.path}</option>`).join("");
+  // Same as loadLibraryOptions: these labels come from Radarr/Sonarr, so they
+  // are set as text on real <option> nodes, never injected as HTML.
+  fillOptions($("#list-profile"), profiles, (p) => [p.id, p.name]);
+  fillOptions($("#list-folder"), folders, (f) => [f.path, f.path]);
   if (values.quality_profile_id) $("#list-profile").value = values.quality_profile_id;
   if (values.root_folder) $("#list-folder").value = values.root_folder;
   $("#list-availability-row").hidden = tv;
@@ -1402,7 +1480,7 @@ async function openLists() {
   try {
     renderLists(await api("/lists"));
   } catch (e) {
-    $("#lists-body").innerHTML = tr("Error") + ": " + e.message;
+    $("#lists-body").textContent = tr("Error") + ": " + e.message;
   }
 }
 
@@ -1421,19 +1499,33 @@ function renderLists(lists) {
     head.appendChild(el("span", "list-badge" + (l.enabled ? "" : " off"), l.enabled ? tr("Active") : tr("Paused")));
     card.appendChild(head);
 
+    // Everything below is built as nodes: filter values, upstream error
+    // messages and added titles are all stored, externally-supplied strings.
     const meta = el("div", "lc-meta");
-    meta.innerHTML =
-      `${tr("Filters")}: <span class="lc-filters">${describeFilters(l.filters) || tr("none (all)")}</span><br>` +
-      `${l.max_pages} ${tr("pages scanned")} · ${tr("last run")}: ${l.last_run ? new Date(l.last_run).toLocaleString() : tr("never")} · ${tr("total added")}: ${l.total_added || 0}`;
+    meta.appendChild(document.createTextNode(tr("Filters") + ": "));
+    meta.appendChild(el("span", "lc-filters", describeFilters(l.filters) || tr("none (all)")));
+    meta.appendChild(el("br"));
+    meta.appendChild(document.createTextNode(
+      `${l.max_pages} ${tr("pages scanned")} · ${tr("last run")}: ` +
+      `${l.last_run ? new Date(l.last_run).toLocaleString() : tr("never")} · ` +
+      `${tr("total added")}: ${l.total_added || 0}`));
     card.appendChild(meta);
 
     if (l.last_result) {
       const r = l.last_result;
       const res = el("div", "lc-result");
-      res.innerHTML = r.error
-        ? `⚠️ ${r.error}`
-        : `${tr("Last run")}: <b>${r.added}</b> ${tr("added")}, ${r.skipped} ${tr("already there")}, ${r.errors} ${tr("errors")}` +
-          (r.added_titles && r.added_titles.length ? ` — ${r.added_titles.slice(0, 5).join(", ")}${r.added_titles.length > 5 ? "…" : ""}` : "");
+      if (r.error) {
+        res.textContent = "⚠️ " + r.error;
+      } else {
+        res.appendChild(document.createTextNode(tr("Last run") + ": "));
+        res.appendChild(el("b", null, String(r.added)));
+        res.appendChild(document.createTextNode(
+          ` ${tr("added")}, ${r.skipped} ${tr("already there")}, ${r.errors} ${tr("errors")}`));
+        if (r.added_titles && r.added_titles.length) {
+          res.appendChild(document.createTextNode(
+            " — " + r.added_titles.slice(0, 5).join(", ") + (r.added_titles.length > 5 ? "…" : "")));
+        }
+      }
       card.appendChild(res);
     }
 
@@ -1520,8 +1612,8 @@ function speakSummary(text) {
 
 // ----------------------- helpers / UI binding -----------------------
 function fmtBytes(b) {
-  if (!b) return "0 o";
-  const u = ["o", "Ko", "Mo", "Go", "To"];
+  if (!b) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"];
   let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
   return `${b.toFixed(1)} ${u[i]}`;
 }
@@ -1592,6 +1684,8 @@ async function switchMedia(media) {
 }
 
 function bindUI() {
+  if (state.uiBound) return;
+  state.uiBound = true;
   setupMobileFilters();
 
   document.querySelectorAll(".media-btn").forEach((btn) => {
@@ -1710,4 +1804,33 @@ function bindUI() {
   setupAutocomplete("#f-company-search", "#f-company-results", "#f-company-selected", "/tmdb/search/company", state.companies, "name");
 }
 
-init().catch((e) => { document.body.innerHTML = `<p style="padding:20px;color:#e25555">${tr("Startup error")}: ${e.message}</p>`; });
+// Startup failed. Keep the interface on screen and say what to fix — the most
+// common cause by far is TMDB_API_KEY still set to its placeholder value.
+function fatal(e) {
+  const msg = String((e && e.message) || e || "");
+  const badKey = /TMDB 401|Invalid API key/i.test(msg);
+  const title = badKey ? tr("Trawlarr can't reach TMDB") : tr("Trawlarr failed to start");
+  const status = $("#status");
+  if (status) status.textContent = title;
+  const grid = $("#results");
+  if (!grid) return;
+  grid.textContent = "";
+  const box = el("div", "fatal");
+  box.appendChild(el("h2", null, title));
+  box.appendChild(el("p", null, badKey
+    ? tr("Check TMDB_API_KEY in your .env, then restart the container. See the README.")
+    : tr("Trawlarr could not load its settings. Check the container logs, then restart it. See the README.")));
+  const details = el("details");
+  details.appendChild(el("summary", null, tr("Technical details")));
+  details.appendChild(el("pre", null, msg));
+  box.appendChild(details);
+  grid.appendChild(box);
+}
+
+init().catch((e) => {
+  console.error("Trawlarr startup failed", e);
+  fatal(e);
+  // The filters, the media switch and the language picker still work offline,
+  // so bind them anyway instead of leaving a frozen page.
+  try { bindUI(); } catch (err) { console.error("bindUI failed after startup error", err); }
+});

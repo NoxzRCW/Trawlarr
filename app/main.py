@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,9 +24,41 @@ from .sonarr import SonarrError, sonarr
 from .store import store
 from .tmdb import IMAGE_BASE, TMDBError, tmdb
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+log = logging.getLogger("trawlarr")
+
+
+def _check_data_dir_writable() -> str | None:
+    """Return a human-readable reason if auto-lists cannot be persisted.
+
+    Failing here is worth a loud log line: a read-only or root-owned data
+    directory otherwise only shows up as an opaque 500 the first time someone
+    saves a list, which is the feature most people come for.
+    """
+    directory = Path(settings.data_dir)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / ".write-probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        return None
+    except OSError as exc:
+        return f"{directory} is not writable ({exc.strerror or exc}). Auto-lists cannot be saved."
+
+
+DATA_DIR_ERROR: str | None = None
+
 
 @contextlib.asynccontextmanager
 async def lifespan(_: FastAPI):
+    global DATA_DIR_ERROR
+    DATA_DIR_ERROR = _check_data_dir_writable()
+    if DATA_DIR_ERROR:
+        log.error(
+            "%s Mount a writable volume, or run the container as the user owning it "
+            "(see the volume note in the README).",
+            DATA_DIR_ERROR,
+        )
     # Background scheduler that rescans auto-lists periodically.
     task = asyncio.create_task(_scheduler_loop())
     try:
@@ -155,7 +188,12 @@ async def _resolve_tvdb(tmdb_id: int) -> int | None:
         except TMDBError:
             # Don't cache transient failures, so a later request can retry.
             return None
-    _tvdb_cache[tmdb_id] = tvdb_id
+    # Only positive results are cached: a show whose external id TMDB has not
+    # published yet must stay retryable instead of being unaddable until restart.
+    if tvdb_id:
+        if len(_tvdb_cache) > 5000:
+            _tvdb_cache.clear()
+        _tvdb_cache[tmdb_id] = tvdb_id
     return tvdb_id
 
 
@@ -199,23 +237,27 @@ async def get_config() -> dict[str, Any]:
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    out: dict[str, Any] = {"tmdb": False, "radarr": False, "sonarr": False}
+    # Never raises: this endpoint backs the container HEALTHCHECK, so it must
+    # report on Trawlarr itself, not on whether Radarr happens to be up.
+    out: dict[str, Any] = {"app": True, "tmdb": False, "radarr": False, "sonarr": False}
+    if DATA_DIR_ERROR:
+        out["storage_error"] = DATA_DIR_ERROR
     try:
         await tmdb.configuration()
         out["tmdb"] = True
-    except TMDBError as e:
+    except Exception as e:  # noqa: BLE001
         out["tmdb_error"] = str(e)
     try:
         status = await radarr.status()
         out["radarr"] = True
         out["radarr_version"] = status.get("version")
-    except RadarrError as e:
+    except Exception as e:  # noqa: BLE001
         out["radarr_error"] = str(e)
     try:
         status = await sonarr.status()
         out["sonarr"] = True
         out["sonarr_version"] = status.get("version")
-    except SonarrError as e:
+    except Exception as e:  # noqa: BLE001
         out["sonarr_error"] = str(e)
     return out
 
@@ -290,6 +332,12 @@ def _resolve_page_size(raw: Any) -> int:
 
 # Number of results per page in the upstream TMDB API.
 TMDB_PAGE_SIZE = 20
+# TMDB refuses any page number above 500 (it answers 400, not an empty page).
+TMDB_MAX_PAGE = 500
+# Upper bound on the pages an auto-list may scan per run.
+MAX_LIST_PAGES = 20
+# Upper bound on the pages a preview may scan (previews are synchronous).
+MAX_PREVIEW_PAGES = 10
 
 
 async def _movie_owner() -> tuple[Any, str]:
@@ -430,11 +478,12 @@ async def text_search(
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> Any:
     size = _resolve_page_size(page_size)
+    start_cursor = _as_int(cursor, 0, 0, TMDB_MAX_PAGE * TMDB_PAGE_SIZE - 1)
 
     async def fetch_page(p: int) -> dict[str, Any]:
         return await tmdb.search_movie(query, page=p, year=year, include_adult=include_adult)
 
-    return await _paginate_filtered(fetch_page, hide_owned, cursor, size)
+    return await _paginate_filtered(fetch_page, hide_owned, start_cursor, size)
 
 
 @app.get("/api/discover")
@@ -445,7 +494,7 @@ async def discover(request: Request) -> Any:
         if key in DISCOVER_PARAMS and key != "page":
             filters[key] = value
     hide_owned = request.query_params.get("hide_owned") == "true"
-    start_cursor = int(request.query_params.get("cursor", 0) or 0)
+    start_cursor = _as_int(request.query_params.get("cursor"), 0, 0, TMDB_MAX_PAGE * TMDB_PAGE_SIZE - 1)
     size = _resolve_page_size(request.query_params.get("page_size"))
 
     async def fetch_page(p: int) -> dict[str, Any]:
@@ -465,12 +514,13 @@ async def tv_text_search(
     page_size: int = DEFAULT_PAGE_SIZE,
 ) -> Any:
     size = _resolve_page_size(page_size)
+    start_cursor = _as_int(cursor, 0, 0, TMDB_MAX_PAGE * TMDB_PAGE_SIZE - 1)
     mark, field = await _tv_owner()
 
     async def fetch_page(p: int) -> dict[str, Any]:
         return await tmdb.search_tv(query, page=p, year=year, include_adult=include_adult)
 
-    return await _paginate_filtered(fetch_page, hide_owned, cursor, size, mark, field)
+    return await _paginate_filtered(fetch_page, hide_owned, start_cursor, size, mark, field)
 
 
 @app.get("/api/tv/discover")
@@ -481,7 +531,7 @@ async def tv_discover(request: Request) -> Any:
         if key in TV_DISCOVER_PARAMS and key != "page":
             filters[key] = value
     hide_owned = request.query_params.get("hide_owned") == "true"
-    start_cursor = int(request.query_params.get("cursor", 0) or 0)
+    start_cursor = _as_int(request.query_params.get("cursor"), 0, 0, TMDB_MAX_PAGE * TMDB_PAGE_SIZE - 1)
     size = _resolve_page_size(request.query_params.get("page_size"))
     mark, field = await _tv_owner()
 
@@ -504,9 +554,12 @@ async def root_folders() -> Any:
 
 @app.post("/api/radarr/add")
 async def add_to_radarr(payload: dict[str, Any]) -> Any:
-    tmdb_id = payload.get("tmdb_id")
-    if not tmdb_id:
+    if not payload.get("tmdb_id"):
         raise HTTPException(status_code=400, detail="tmdb_id is required")
+    try:
+        tmdb_id = int(payload["tmdb_id"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="tmdb_id must be an integer")
 
     quality_profile_id = payload.get("quality_profile_id") or settings.radarr_quality_profile_id
     root_folder = payload.get("root_folder") or settings.radarr_root_folder
@@ -522,16 +575,21 @@ async def add_to_radarr(payload: dict[str, Any]) -> Any:
             raise HTTPException(status_code=400, detail="No Radarr root folders available")
         root_folder = folders[0]["path"]
 
+    try:
+        quality_profile_id = int(quality_profile_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="quality_profile_id must be an integer")
+
     monitored = payload.get("monitor", settings.radarr_monitor)
     search_on_add = payload.get("search_on_add", settings.radarr_search_on_add)
     minimum_availability = payload.get("minimum_availability", settings.radarr_minimum_availability)
 
     # Build the list of TMDB ids to add. When add_collection is requested,
     # resolve the movie's collection and queue every part that isn't in Radarr yet.
-    tmdb_ids = [int(tmdb_id)]
+    tmdb_ids = [tmdb_id]
     if payload.get("add_collection"):
         try:
-            movie = await tmdb.movie(int(tmdb_id))
+            movie = await tmdb.movie(tmdb_id)
             collection = movie.get("belongs_to_collection")
             if collection and collection.get("id"):
                 details = await tmdb.collection(int(collection["id"]))
@@ -549,13 +607,13 @@ async def add_to_radarr(payload: dict[str, Any]) -> Any:
     skipped: list[int] = []
     errors: list[dict[str, Any]] = []
     for tid in tmdb_ids:
-        if tid != int(tmdb_id) and tid in existing:
+        if tid != tmdb_id and tid in existing:
             skipped.append(tid)
             continue
         try:
             result = await radarr.add_movie(
                 tmdb_id=tid,
-                quality_profile_id=int(quality_profile_id),
+                quality_profile_id=quality_profile_id,
                 root_folder_path=root_folder,
                 monitored=monitored,
                 search_on_add=search_on_add,
@@ -587,9 +645,12 @@ async def sonarr_root_folders() -> Any:
 
 @app.post("/api/sonarr/add")
 async def add_to_sonarr(payload: dict[str, Any]) -> Any:
-    tmdb_id = payload.get("tmdb_id")
-    if not tmdb_id:
+    if not payload.get("tmdb_id"):
         raise HTTPException(status_code=400, detail="tmdb_id is required")
+    try:
+        tmdb_id = int(payload["tmdb_id"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="tmdb_id must be an integer")
 
     quality_profile_id = payload.get("quality_profile_id") or settings.sonarr_quality_profile_id
     root_folder = payload.get("root_folder") or settings.sonarr_root_folder
@@ -605,10 +666,20 @@ async def add_to_sonarr(payload: dict[str, Any]) -> Any:
             raise HTTPException(status_code=400, detail="No Sonarr root folders available")
         root_folder = folders[0]["path"]
 
+    try:
+        quality_profile_id = int(quality_profile_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="quality_profile_id must be an integer")
+
     # Resolve the TMDB id to a TVDB id (Sonarr indexes series by TVDB).
     tvdb_id = payload.get("tvdb_id")
-    if not tvdb_id:
-        tvdb_id = await _resolve_tvdb(int(tmdb_id))
+    if tvdb_id:
+        try:
+            tvdb_id = int(tvdb_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="tvdb_id must be an integer")
+    else:
+        tvdb_id = await _resolve_tvdb(tmdb_id)
     if not tvdb_id:
         raise HTTPException(
             status_code=404,
@@ -616,8 +687,8 @@ async def add_to_sonarr(payload: dict[str, Any]) -> Any:
         )
 
     return await sonarr.add_series(
-        tvdb_id=int(tvdb_id),
-        quality_profile_id=int(quality_profile_id),
+        tvdb_id=tvdb_id,
+        quality_profile_id=quality_profile_id,
         root_folder_path=root_folder,
         monitored=payload.get("monitor", settings.sonarr_monitor),
         search_on_add=payload.get("search_on_add", settings.sonarr_search_on_add),
@@ -719,12 +790,15 @@ async def assistant(payload: dict[str, Any]) -> Any:
 @app.post("/api/summarize")
 async def summarize(payload: dict[str, Any]) -> Any:
     """Generate a short, spoiler-free spoken summary (synopsis, cast, themes)."""
-    tmdb_id = payload.get("tmdb_id")
-    if not tmdb_id:
-        raise HTTPException(status_code=400, detail="tmdb_id requis")
+    if not payload.get("tmdb_id"):
+        raise HTTPException(status_code=400, detail="tmdb_id is required")
+    try:
+        tmdb_id = int(payload["tmdb_id"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="tmdb_id must be an integer")
     media = "tv" if payload.get("media") == "tv" else "movie"
 
-    d = await (tmdb.tv(int(tmdb_id)) if media == "tv" else tmdb.movie(int(tmdb_id)))
+    d = await (tmdb.tv(tmdb_id) if media == "tv" else tmdb.movie(tmdb_id))
     title = d.get("title") or d.get("name")
     year = (d.get("release_date") or d.get("first_air_date") or "")[:4]
     genres = [g["name"] for g in d.get("genres", [])]
@@ -826,7 +900,7 @@ async def _resolve_list_add_target(lst: dict[str, Any]) -> dict[str, Any]:
     if not lst.get("root_folder"):
         folders = await client.root_folders()
         if not folders:
-            raise RuntimeError(f"Aucun dossier racine {media} disponible")
+            raise RuntimeError(f"No {media} root folder available")
         lst["root_folder"] = folders[0]["path"]
     return lst
 
@@ -836,7 +910,9 @@ async def run_list(lst: dict[str, Any]) -> dict[str, Any]:
     in the library. Returns a result summary (also persisted on the list)."""
     media = "tv" if lst.get("media") == "tv" else "movie"
     filters = dict(lst.get("filters") or {})
-    max_pages = int(lst.get("max_pages") or settings.list_max_pages)
+    # Clamped again here: a list persisted by an older version (or edited on
+    # disk) must never make the scheduler loop for thousands of pages.
+    max_pages = _as_int(lst.get("max_pages"), settings.list_max_pages, 1, MAX_LIST_PAGES)
     result: dict[str, Any] = {
         "at": _now_iso(), "checked": 0, "added": 0, "skipped": 0,
         "errors": 0, "added_titles": [], "error": None,
@@ -882,22 +958,32 @@ async def run_list(lst: dict[str, Any]) -> dict[str, Any]:
                     result["added"] += 1
                     if len(result["added_titles"]) < 50:
                         result["added_titles"].append(title)
-                except (RadarrError, SonarrError, TMDBError):
+                except (RadarrError, SonarrError, TMDBError) as e:
+                    log.warning("list %s: %s failed: %s", lst.get("name"), title, e)
                     result["errors"] += 1
             if page >= (data.get("total_pages") or 1):
                 break
+    except (RadarrError, SonarrError, TMDBError, RuntimeError) as e:
+        # An expected outage (Radarr down, TMDB rate-limited): one clear line,
+        # no traceback — the user needs the reason, not our call stack.
+        log.warning("list %s aborted: %s", lst.get("name"), e)
+        result["error"] = str(e)
     except Exception as e:  # noqa: BLE001 - record the failure on the list
+        log.exception("list %s scan failed unexpectedly", lst.get("name"))
         result["error"] = str(e)
 
+    # Only the run outcome is persisted: quality_profile_id / root_folder are
+    # NOT rewritten here, so an edit made while the scan was running survives.
     patch = {
         "last_run": _now_iso(),
         "last_result": result,
         "total_added": int(lst.get("total_added") or 0) + result["added"],
-        # Persist any defaults we resolved so the UI shows them.
-        "quality_profile_id": lst.get("quality_profile_id"),
-        "root_folder": lst.get("root_folder"),
     }
     await store.update(lst["id"], patch)
+    log.info(
+        "list %s: %d checked, %d added, %d skipped, %d errors",
+        lst.get("name"), result["checked"], result["added"], result["skipped"], result["errors"],
+    )
     return result
 
 
@@ -916,22 +1002,43 @@ async def _scheduler_loop() -> None:
                 if last:
                     try:
                         due = (now - datetime.fromisoformat(last)).total_seconds() >= interval
-                    except ValueError:
+                    except (ValueError, TypeError):
                         due = True
                 if due:
-                    await run_list(lst)
+                    # Isolated: one failing list must not skip the others.
+                    try:
+                        await run_list(lst)
+                    except Exception:  # noqa: BLE001
+                        log.exception("auto-list %s failed", lst.get("name"))
         except Exception:  # noqa: BLE001 - never let the scheduler die
-            pass
+            log.exception("scheduler tick failed")
         # Tick hourly; each list still only runs once per refresh interval.
         await asyncio.sleep(min(interval, 3600))
 
 
+def _as_int(value: Any, default: int, lo: int, hi: int) -> int:
+    """Coerce an untrusted value to an int clamped to [lo, hi], or `default`."""
+    try:
+        return max(lo, min(int(value), hi))
+    except (TypeError, ValueError):
+        # The default comes from configuration, which is untrusted too.
+        return max(lo, min(default, hi))
+
+
+def _require_filters_dict(payload: dict[str, Any]) -> dict[str, Any]:
+    filters = payload.get("filters") or {}
+    if not isinstance(filters, dict):
+        raise HTTPException(status_code=400, detail="filters must be an object")
+    return filters
+
+
 def _list_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     media = "tv" if payload.get("media") == "tv" else "movie"
+    filters = _require_filters_dict(payload)
     return {
-        "name": (payload.get("name") or "Liste sans nom").strip(),
+        "name": (payload.get("name") or "Untitled list").strip(),
         "media": media,
-        "filters": payload.get("filters") or {},
+        "filters": filters,
         "quality_profile_id": payload.get("quality_profile_id") or None,
         "root_folder": payload.get("root_folder") or None,
         "monitor": bool(payload.get("monitor", True)),
@@ -939,8 +1046,9 @@ def _list_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "minimum_availability": payload.get("minimum_availability", settings.radarr_minimum_availability),
         "series_type": payload.get("series_type", settings.sonarr_series_type),
         "season_folder": bool(payload.get("season_folder", settings.sonarr_season_folder)),
-        "enabled": bool(payload.get("enabled", True)),
-        "max_pages": int(payload.get("max_pages") or settings.list_max_pages),
+        # Hard cap: a saved list is replayed by the scheduler forever, so an
+        # unbounded page count would hammer TMDB on every tick.
+        "max_pages": _as_int(payload.get("max_pages"), settings.list_max_pages, 1, MAX_LIST_PAGES),
     }
 
 
@@ -952,7 +1060,10 @@ async def get_lists() -> Any:
 @app.post("/api/lists")
 async def create_list(payload: dict[str, Any]) -> Any:
     obj = _list_from_payload(payload)
-    obj.update({"created_at": _now_iso(), "last_run": None, "last_result": None, "total_added": 0})
+    obj.update({
+        "enabled": True, "created_at": _now_iso(),
+        "last_run": None, "last_result": None, "total_added": 0,
+    })
     created = await store.create(obj)
     return created
 
@@ -960,16 +1071,20 @@ async def create_list(payload: dict[str, Any]) -> Any:
 @app.put("/api/lists/{list_id}")
 async def update_list(list_id: str, payload: dict[str, Any]) -> Any:
     patch = _list_from_payload(payload)
+    # Pause state is only ever changed when the caller says so explicitly:
+    # saving an edited list (a rename, say) must leave a paused list paused.
+    if "enabled" in payload:
+        patch["enabled"] = bool(payload["enabled"])
     updated = await store.update(list_id, patch)
     if not updated:
-        raise HTTPException(status_code=404, detail="Liste introuvable")
+        raise HTTPException(status_code=404, detail="List not found")
     return updated
 
 
 @app.delete("/api/lists/{list_id}")
 async def delete_list(list_id: str) -> Any:
     if not await store.delete(list_id):
-        raise HTTPException(status_code=404, detail="Liste introuvable")
+        raise HTTPException(status_code=404, detail="List not found")
     return {"deleted": True}
 
 
@@ -977,7 +1092,7 @@ async def delete_list(list_id: str) -> Any:
 async def run_list_now(list_id: str) -> Any:
     lst = await store.get(list_id)
     if not lst:
-        raise HTTPException(status_code=404, detail="Liste introuvable")
+        raise HTTPException(status_code=404, detail="List not found")
     return await run_list(lst)
 
 
@@ -986,8 +1101,8 @@ async def preview_list(payload: dict[str, Any]) -> Any:
     """Show which media match a set of filters (annotated with library
     ownership) WITHOUT adding anything. Works for unsaved or saved lists."""
     media = "tv" if payload.get("media") == "tv" else "movie"
-    filters = payload.get("filters") or {}
-    max_pages = max(1, min(int(payload.get("max_pages") or settings.list_max_pages), 10))
+    filters = _require_filters_dict(payload)
+    max_pages = _as_int(payload.get("max_pages"), settings.list_max_pages, 1, MAX_PREVIEW_PAGES)
     mark, field = await (_tv_owner() if media == "tv" else _movie_owner())
 
     results: list[dict[str, Any]] = []

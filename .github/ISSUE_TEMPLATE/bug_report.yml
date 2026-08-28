@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in Trawlarr does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The four required fields below
+        are the ones that decide whether a bug can be reproduced or not — please
+        fill them in even if they look irrelevant.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        1. Opened the filters drawer and set …
+        2. Clicked "Add to Radarr"
+        3. Expected the title to appear in Radarr; got a red toast saying …
+    validations:
+      required: true
+
+  - type: input
+    id: image-version
+    attributes:
+      label: Image tag or digest
+      description: >-
+        Output of `docker inspect --format '{{index .Config.Image}} {{.Image}}' trawlarr`,
+        or the tag from your compose file. "latest" alone is not enough — the digest is.
+      placeholder: "ghcr.io/noxzrcw/trawlarr:latest — sha256:1a2b3c…"
+    validations:
+      required: true
+
+  - type: input
+    id: architecture
+    attributes:
+      label: Host architecture and OS
+      description: >-
+        Output of `uname -srm`. The published image is built for amd64; arm64 hosts
+        (Raspberry Pi, Apple Silicon, most NAS units) behave differently.
+      placeholder: "Linux 6.1.0-18-amd64 x86_64 — Debian 12 / Synology DSM 7.2 / unRAID 6.12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container logs
+      description: >-
+        Output of `docker logs --tail 100 trawlarr`. Auto-list scans log what they
+        checked, added and skipped, plus the reason behind every error.
+        Redact your API keys before pasting.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: health
+    attributes:
+      label: Health check
+      description: >-
+        Output of `curl http://localhost:8080/api/health` — it reports TMDB, Radarr
+        and Sonarr connectivity, which rules out half the possible causes in one line.
+        ⚠️ When a call fails, the `tmdb_error` / `radarr_error` / `sonarr_error` fields
+        can quote the failing request URL, which contains your API key. Replace every
+        `api_key=…` and `apikey=…` value with `REDACTED` before pasting.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >-
+        Browser and version if the problem is in the UI, a screenshot, your compose
+        file with the keys removed, or the browser console output.
+    validations:
+      required: false

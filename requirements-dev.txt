@@ -1,0 +1,15 @@
+# Test-only dependencies. They are NOT installed in the Docker image:
+# the Dockerfile installs requirements.txt only.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   pytest -q
+
+pytest==9.1.1
+pytest-asyncio==1.4.0
+# Mocks httpx at the transport level, so the tests never touch TMDB,
+# Radarr, Sonarr or Mistral for real.
+respx==0.23.1
+# Needed by fastapi.testclient.TestClient. Deliberately left unpinned here:
+# the authoritative pin lives in requirements.txt, and pinning it twice is
+# how the two files silently drift apart.
+httpx

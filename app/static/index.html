@@ -177,7 +177,7 @@
           </select>
         </label>
       </div>
-      <div id="selection-bar" class="selection-bar hidden">
+      <div id="selection-bar" class="selection-bar hidden" aria-live="polite">
         <span id="selection-count">0 selected</span>
         <div class="selection-actions">
           <button id="select-all">Select all</button>
@@ -186,7 +186,7 @@
         </div>
       </div>
       <div id="assistant-banner" class="assistant-banner hidden"></div>
-      <div id="status" class="status"></div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
       <div id="results" class="grid"></div>
       <div id="pagination" class="pagination"></div>
     </main>

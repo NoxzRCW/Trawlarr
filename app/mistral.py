@@ -39,8 +39,11 @@ class MistralClient:
             "top_p": 0.95,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(MISTRAL_URL, headers=headers, json=body)
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                resp = await client.post(MISTRAL_URL, headers=headers, json=body)
+        except httpx.RequestError as e:
+            raise MistralError(f"Mistral unreachable at {MISTRAL_URL}: {e}") from e
         if resp.status_code >= 400:
             raise MistralError(f"Mistral {resp.status_code}: {resp.text}")
         try:
@@ -61,8 +64,11 @@ class MistralClient:
             "temperature": 0.2,
         }
         headers = {"Authorization": f"Bearer {self.api_key}"}
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(MISTRAL_URL, headers=headers, json=body)
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                resp = await client.post(MISTRAL_URL, headers=headers, json=body)
+        except httpx.RequestError as e:
+            raise MistralError(f"Mistral unreachable at {MISTRAL_URL}: {e}") from e
         if resp.status_code >= 400:
             raise MistralError(f"Mistral {resp.status_code}: {resp.text}")
         data = resp.json()

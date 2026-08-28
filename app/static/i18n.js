@@ -225,6 +225,8 @@ const LOCALES = {
     "Loading…": "Chargement…",
     "Searching…": "Recherche…",
     "Connection failed": "Connexion impossible",
+    "unavailable": "indisponible",
+    "free": "libres",
     "Recommendations": "Recommandations",
     "Enter a title.": "Saisissez un titre.",
     "Official site": "Site officiel",
@@ -232,6 +234,15 @@ const LOCALES = {
     "Delete": "Supprimer",
     "Run now": "Lancer maintenant",
     "Edit": "Modifier",
+    "Adding… ({i}/{n})": "Ajout… ({i}/{n})",
+    // --- startup failure screen
+    "Trawlarr can't reach TMDB": "Trawlarr ne peut pas joindre TMDB",
+    "Trawlarr failed to start": "Trawlarr n'a pas pu démarrer",
+    "Check TMDB_API_KEY in your .env, then restart the container. See the README.":
+      "Vérifiez TMDB_API_KEY dans votre fichier .env, puis redémarrez le conteneur. Voir le README.",
+    "Trawlarr could not load its settings. Check the container logs, then restart it. See the README.":
+      "Trawlarr n'a pas pu charger sa configuration. Consultez les logs du conteneur, puis redémarrez-le. Voir le README.",
+    "Technical details": "Détails techniques",
     // --- generic
     "Failed": "Échec",
     "Error": "Erreur",

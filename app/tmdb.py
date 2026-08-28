@@ -48,7 +48,7 @@ class TMDBClient:
                     await asyncio.sleep(0.5 * (attempt + 1))
                     continue
                 if resp.status_code >= 400:
-                    raise TMDBError(f"TMDB {resp.status_code}: {resp.text}")
+                    raise TMDBError(f"TMDB {resp.status_code}: {resp.text[:300]}")
                 return resp.json()
         raise TMDBError("TMDB request failed after retries")
 

@@ -27,10 +27,14 @@ class RadarrClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         url = f"{self.base_url}/api/v3{path}"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.request(method, url, headers=self._headers(), **kwargs)
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.request(method, url, headers=self._headers(), **kwargs)
+        except httpx.RequestError as e:
+            # Radarr down / wrong host / DNS: a business error, not a 500.
+            raise RadarrError(f"Radarr unreachable at {self.base_url}: {e}") from e
         if resp.status_code >= 400:
-            raise RadarrError(f"Radarr {resp.status_code}: {resp.text}")
+            raise RadarrError(f"Radarr {resp.status_code}: {resp.text[:300]}")
         if resp.content:
             return resp.json()
         return None

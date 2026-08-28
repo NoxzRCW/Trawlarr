@@ -4,10 +4,24 @@ services:
     container_name: trawlarr
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      # Listens on localhost only. To expose it on your LAN, change this to
+      # "8080:8080" knowingly (see the Security section of the README).
+      - "127.0.0.1:8080:8080"
     volumes:
-      # Persiste les listes automatiques entre les redémarrages.
-      - ./data:/data
+      # A named volume keeps the auto-lists across restarts and needs no host
+      # permission setup. To keep lists.json somewhere you can read instead,
+      # swap this for a bind mount and match the container user:
+      #   user: "${PUID:-1000}:${PGID:-1000}"
+      #   volumes: [ "./data:/data" ]     # run `mkdir -p data` first
+      - trawlarr-data:/data
+    # Hardening: the app only ever writes to /data (the volume above).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     environment:
       # --- TMDB ---
       TMDB_API_KEY: ${TMDB_API_KEY}
@@ -40,3 +54,6 @@ services:
       DATA_DIR: ${DATA_DIR:-/data}
       LIST_REFRESH_HOURS: ${LIST_REFRESH_HOURS:-12}
       LIST_MAX_PAGES: ${LIST_MAX_PAGES:-3}
+
+volumes:
+  trawlarr-data:

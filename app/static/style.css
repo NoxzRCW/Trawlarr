@@ -1,7 +1,7 @@
 /* =====================================================================
-   Media Search — Édition Noire
-   Thème cinéma de luxe : noir profond, or champagne, serif éditoriale,
-   hairlines, animations lentes et discrètes.
+   Trawlarr — interface styles
+   Dark, neutral, poster-first. The artwork carries the colour; the chrome
+   stays quiet. One accent, used only for the primary action.
    ===================================================================== */
 :root {
   /* Base neutre, dans l'esprit Plex : du gris, pas du noir, aucune teinte chaude. */
@@ -13,7 +13,7 @@
   --muted: rgba(255, 255, 255, 0.55);
   --hairline: rgba(255, 255, 255, 0.08);
   --hairline-strong: rgba(255, 255, 255, 0.16);
-  /* L'ambre ne sert plus de décor : uniquement action principale et état actif. */
+  /* Amber is an accent only: primary action and active state, never decoration. */
   --gold: #e5a00d;
   --gold-bright: #f6bb42;
   --gold-deep: #c98a06;
@@ -29,7 +29,7 @@
   --pill: 999px;
   --shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  /* Une seule famille, comme Plex. --serif reste défini pour ne rien casser. */
+  /* A single family. --serif is kept as an alias so older rules still resolve. */
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --serif: var(--sans);
 }
@@ -48,7 +48,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Halo doré très discret, dérive extrêmement lente */
+/* Very faint halo, drifting slowly. */
 body::before {
   content: "";
   position: fixed;
@@ -64,7 +64,7 @@ body::before {
   0%   { transform: translate3d(0, 0, 0); }
   100% { transform: translate3d(-2.5%, 2%, 0) scale(1.04); }
 }
-/* Grain de pellicule, à peine perceptible */
+/* Barely perceptible film grain. */
 body::after {
   content: "";
   position: fixed; inset: 0; z-index: -1;
@@ -96,7 +96,7 @@ header {
   top: 0;
   z-index: 20;
 }
-/* Filet doré sous le header */
+/* Hairline under the header. */
 header::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
@@ -211,7 +211,9 @@ input, select {
   color: var(--text); font-size: 13px; font-family: var(--sans);
   transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
-input::placeholder { color: rgba(142, 138, 128, 0.55); }
+/* The min/max fields have no label other than their placeholder, so it has to
+   stay readable: 4.6:1 instead of 2.1:1. */
+input::placeholder { color: rgba(255, 255, 255, 0.42); }
 input:focus, select:focus {
   outline: none; border-color: var(--gold-line);
   box-shadow: 0 0 0 3px rgba(200, 169, 110, 0.14);
@@ -319,6 +321,22 @@ main { flex: 1; padding: 26px 30px; min-width: 0; }
   font-size: 12.5px; letter-spacing: 0.04em;
 }
 
+/* Startup failure panel: replaces the results grid, never the whole page. */
+.fatal {
+  grid-column: 1 / -1;
+  max-width: 640px; padding: 24px 26px;
+  background: rgba(226, 85, 85, 0.06);
+  border: 1px solid rgba(226, 85, 85, 0.35); border-radius: var(--radius);
+}
+.fatal h2 { font-family: var(--serif); font-size: 20px; margin-bottom: 10px; color: var(--text); }
+.fatal p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin-bottom: 14px; }
+.fatal summary { cursor: pointer; color: var(--muted); font-size: 12.5px; letter-spacing: 0.04em; }
+.fatal pre {
+  margin-top: 10px; padding: 10px 12px; overflow-x: auto;
+  background: rgba(0, 0, 0, 0.35); border-radius: 8px;
+  font-size: 12px; white-space: pre-wrap; word-break: break-word; color: var(--muted);
+}
+
 .grid {
   display: grid; gap: 20px;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -356,7 +374,7 @@ main { flex: 1; padding: 26px 30px; min-width: 0; }
 img.poster { opacity: 0; }
 img.poster.loaded { opacity: 1; }
 .card:hover .poster { transform: scale(1.045); }
-/* Affiche manquante : monogramme serif doré */
+/* Missing artwork: a monogram placeholder. */
 .card .poster-ph, .poster-ph {
   display: flex !important; align-items: center; justify-content: center;
   font-family: var(--serif); font-size: 64px; font-weight: 500; font-style: italic;
@@ -450,7 +468,7 @@ img.poster.loaded { opacity: 1; }
   margin: 0 0 8px; font-family: var(--serif); font-size: 22px; font-weight: 600;
   letter-spacing: 0.01em;
 }
-/* Filet doré au sommet des modales */
+/* Hairline across the top of modals. */
 .modal-content, .detail-content, .assistant-card {
   background-clip: padding-box;
 }
@@ -689,16 +707,15 @@ img.poster.loaded { opacity: 1; }
 
 
 /* =====================================================================
-   Passe « Plex » : base neutre, une seule famille de caractères,
-   boutons en pilule, accent ambre réservé à l'action. Les affiches
-   portent la couleur, le décor se tait.
+   Neutral base, a single type family, pill controls, and an amber accent
+   reserved for actions. The posters carry the colour; the chrome keeps quiet.
    ===================================================================== */
 
-/* Plus de halo doré ni de grain de pellicule : le fond ne doit rien raconter. */
+/* No halo, no grain: the background should not tell a story of its own. */
 body::before, body::after { content: none !important; }
 body { background: var(--bg); }
 
-/* ---- En-tête ---- */
+/* ---- Header ---- */
 header {
   background: var(--bg);
   border-bottom: 1px solid var(--hairline);
@@ -738,7 +755,7 @@ button.primary {
 button.primary:hover { background: var(--gold-bright); color: var(--ink); box-shadow: none; }
 button.primary::after { content: none; }   /* le reflet qui traversait le bouton */
 
-/* ---- Filtres : plus sobres, et la liste des plateformes ne déborde plus ---- */
+/* ---- Filters: quieter, and the provider list no longer overflows ---- */
 fieldset { background: transparent; border-color: var(--hairline); border-radius: var(--radius); }
 legend {
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
@@ -747,10 +764,14 @@ legend {
 .tab.active, .media-btn.active { color: var(--text); }
 .media-btn.active { background: rgba(255, 255, 255, 0.12); }
 .tab.active::after { background: var(--gold); }
-input, select { border-radius: var(--radius); background: rgba(255, 255, 255, 0.06); }
+input, select {
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.22);
+}
 input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 
-/* Le mur de plateformes devient une boîte compacte qui défile. */
+/* The wall of providers becomes a compact scrolling box. */
 #f-providers {
   max-height: 176px; overflow-y: auto;
   padding: 8px; margin-top: 8px;
@@ -766,7 +787,7 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 .chip.include, .chips.selected .chip { background: var(--gold); color: var(--ink); border-color: transparent; }
 .chip.exclude { background: rgba(229, 72, 77, 0.9); color: #fff; border-color: transparent; }
 
-/* ---- Cartes : l'affiche d'abord, le cadre disparaît ---- */
+/* ---- Cards: artwork first, the frame disappears ---- */
 .card {
   background: transparent; border: none; border-radius: var(--radius-card);
   overflow: visible;
@@ -782,14 +803,17 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 .card.selected { border: none; box-shadow: none; }
 .card.selected .poster, .card.selected .poster-ph { box-shadow: 0 0 0 3px var(--gold), 0 10px 28px rgba(0, 0, 0, 0.6); }
 .card .body { padding: 10px 2px 0; }
+/* Clamp to two lines so one long title cannot stretch its whole grid row. */
 .card .title {
   font-family: var(--sans); font-size: 14px; font-weight: 600;
   letter-spacing: 0; line-height: 1.3; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; min-height: 2.6em;
 }
 .card .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .card .rating { color: var(--muted); }
 
-/* ---- Barres d'outils : posées sur le fond, pas en carte flottante ---- */
+/* ---- Toolbars: laid on the background, not floating cards ---- */
 .results-toolbar, .selection-bar, .assistant-banner {
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--hairline);
@@ -797,7 +821,7 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
   backdrop-filter: none;
 }
 
-/* ---- Fenêtres ---- */
+/* ---- Dialogs ---- */
 .modal-content, .detail-content {
   background: var(--bg-elev);
   border: 1px solid var(--hairline);
@@ -809,7 +833,7 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 .detail-section h3 { color: var(--muted); letter-spacing: 0.1em; }
 
 
-/* ---- Densité des cartes : l'affiche, le titre, l'année. Rien d'autre. ---- */
+/* ---- Card density: artwork, title, year. Nothing else. ---- */
 .card .overview { display: none; }
 .card .body {
   display: flex; flex-direction: column; gap: 4px;
@@ -821,12 +845,12 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 .card .body .detail-btn, .card .body .summary-btn {
   background: rgba(255, 255, 255, 0.08);
 }
-/* Les deux actions secondaires côte à côte plutôt qu'empilées pleine largeur. */
+/* The two secondary actions sit side by side rather than stacked full width. */
 .card .body { position: relative; }
 .card .body .detail-btn { margin-top: 6px; }
 .card .badge-in { font-size: 11px; }
 
-/* La liste des plateformes s'efface en bas au lieu d'être tranchée net. */
+/* The provider list fades out at the bottom instead of being cut off. */
 #f-providers {
   -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
@@ -862,7 +886,7 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 .card-actions .detail-btn, .card-actions .summary-btn { background: rgba(255, 255, 255, 0.18); }
 .card-actions .detail-btn:hover, .card-actions .summary-btn:hover { background: rgba(255, 255, 255, 0.3); }
 
-/* Sur écran tactile il n'y a pas de survol : on montre les actions en permanence. */
+/* Touch screens have no hover, so the actions stay visible there. */
 @media (hover: none) {
   .card-actions { opacity: 1; transform: none; }
 }
@@ -877,12 +901,11 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 
 /* =====================================================================
    Passe 2 — la mise en page, pas seulement les couleurs.
-   La colonne de filtres permanente disparaît : elle devient un tiroir,
-   comme chez Plex. Le contenu prend toute la largeur et ce sont les
-   affiches qui occupent l'écran.
+   The permanent filter column becomes a drawer. Content runs full width
+   and the posters get the screen.
    ===================================================================== */
 
-/* ---- Le tiroir de filtres, à toutes les tailles d'écran ---- */
+/* ---- The filter drawer, at every screen width ---- */
 .filter-toggle {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 14px; line-height: 1;
@@ -925,7 +948,7 @@ input:focus, select:focus { border-color: var(--gold-line); box-shadow: none; }
 main { width: 100%; padding: 22px 32px 60px; }
 .grid { gap: 22px 18px; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
 
-/* ---- Barres d'outils : des contrôles posés sur le fond, plus de cartes ---- */
+/* ---- Toolbars: plain controls on the background, no more cards ---- */
 .results-toolbar, .selection-bar {
   background: none; border: none; border-radius: 0;
   padding: 0; margin-bottom: 14px;
@@ -934,7 +957,7 @@ main { width: 100%; padding: 22px 32px 60px; }
 .results-toolbar { gap: 10px 22px; }
 .status { margin-bottom: 14px; }
 
-/* ---- L'en-tête devient une vraie barre supérieure ---- */
+/* ---- The header becomes a proper top bar ---- */
 header { padding: 0 24px; gap: 14px; }
 header .health { margin-left: auto; }
 header .media-switch {
@@ -948,7 +971,7 @@ header .media-switch .media-btn {
 header .media-switch .media-btn.active { background: rgba(255, 255, 255, 0.14); color: var(--text); }
 
 
-/* ---- Réglages de la barre supérieure ---- */
+/* ---- Top bar tuning ---- */
 header h1 { order: -1; margin-right: 4px; }      /* le nom d'abord, puis les filtres */
 .filter-toggle { order: 0; white-space: nowrap; }
 header .media-switch { order: 1; }
@@ -959,7 +982,7 @@ header .media-switch .media-btn {
   min-width: 0; height: 32px; display: inline-flex; align-items: center;
 }
 
-/* Une seule ligne de contrôles au-dessus de la grille. */
+/* A single row of controls above the grid. */
 .results-toolbar { margin-bottom: 10px; font-size: 13px; }
 .results-toolbar label.inline select { padding: 5px 8px; font-size: 13px; }
 .selection-bar { margin-bottom: 12px; }

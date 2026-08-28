@@ -7,7 +7,10 @@ plain synchronous file IO is fine.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import logging
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -23,9 +26,18 @@ class ListStore:
     def _read(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
+        # OSError is deliberately NOT caught: a permission or disk problem must
+        # surface as an error rather than be mistaken for "no lists yet" — that
+        # confusion is what let the next write wipe the file.
         try:
             return json.loads(self.path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError:
+            # Never silently start from an empty list: the next write would
+            # destroy the user's auto-lists for good. Keep the evidence.
+            backup = self.path.with_suffix(f".corrupt-{int(time.time())}")
+            with contextlib.suppress(OSError):
+                self.path.rename(backup)
+            logging.getLogger("trawlarr").error("lists.json is corrupt, moved to %s", backup)
             return []
 
     def _write(self, data: list[dict[str, Any]]) -> None:
