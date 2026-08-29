@@ -91,7 +91,7 @@ docker run -d --name trawlarr -p 127.0.0.1:8080:8080 \
 ```
 
 Open **http://localhost:8080**. That is the whole install — the image is prebuilt
-for `amd64`, nothing to compile.
+for `amd64` and `arm64`, so a Pi or an N100 box works the same way.
 
 > **Note on the volume.** Trawlarr runs as uid 1000 inside the container. Create the
 > data directory first so it belongs to you: `mkdir -p data && chown 1000:1000 data`.
