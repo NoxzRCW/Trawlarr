@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a filter, an integration, or a change to how Trawlarr works
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing: a frontend framework, a bundler, a CDN dependency or a
+        database in place of `lists.json` will be turned down — see
+        [CONTRIBUTING](../blob/main/CONTRIBUTING.md). Everything else is open.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that you cannot do today?
+      description: Describe the situation, not the solution. What are you actually after?
+      placeholder: I want every A24 release added automatically, but I can only filter by...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: Optional. If you already have a shape in mind, describe it.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do instead right now?
+      description: A workaround tells us how much this actually costs you.
+    validations:
+      required: false

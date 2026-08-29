@@ -1631,6 +1631,118 @@ function resetFilters() {
   renderSelected($("#f-company-selected"), state.companies);
 }
 
+
+// ----------------------- Accessible dialogs -----------------------
+// Every modal is shown by removing `hidden` from a `.modal` element. Rather
+// than touching a dozen open/close call sites, watch that class from one place
+// and wire the accessibility behaviour: labelling, a focus trap, and returning
+// focus where it came from. A keyboard user must never end up tabbing through
+// the page behind an open dialog.
+const FOCUSABLE = [
+  "a[href]", "button:not([disabled])", "input:not([disabled])",
+  "select:not([disabled])", "textarea:not([disabled])", '[tabindex]:not([tabindex="-1"])',
+].join(",");
+
+let focusBeforeDialog = null;
+
+function visibleFocusable(root) {
+  return [...root.querySelectorAll(FOCUSABLE)].filter((e) => e.offsetParent !== null || e === document.activeElement);
+}
+
+function trapTab(e) {
+  if (e.key !== "Tab") return;
+  const items = visibleFocusable(e.currentTarget);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+/** Point the dialog at its own heading, or fall back to a static name. */
+const DIALOG_LABELS = {
+  "modal": "Add to your library",
+  "detail-modal": "Title details",
+  "list-modal": "Create an auto-list",
+  "preview-modal": "Auto-list preview",
+  "lists-modal": "My auto-lists",
+  "summary-modal": "Spoken summary",
+  "assistant-overlay": "Voice assistant",
+};
+
+function labelDialog(modal) {
+  const heading = modal.querySelector("h2, h3");
+  if (heading && heading.textContent.trim()) {
+    if (!heading.id) heading.id = modal.id + "-title";
+    modal.setAttribute("aria-labelledby", heading.id);
+    modal.removeAttribute("aria-label");
+  } else if (DIALOG_LABELS[modal.id]) {
+    modal.setAttribute("aria-label", tr(DIALOG_LABELS[modal.id]));
+  }
+}
+
+function dialogShown(modal) {
+  focusBeforeDialog = document.activeElement;
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  labelDialog(modal);
+  // Detail and preview panes fill in after their fetch resolves, so the heading
+  // may not exist yet when the dialog opens. Label it again once it does.
+  if (!modal.hasAttribute("aria-labelledby")) setTimeout(() => labelDialog(modal), 1200);
+  modal.addEventListener("keydown", trapTab);
+  const items = visibleFocusable(modal);
+  if (items.length) items[0].focus();
+}
+
+function dialogHidden(modal) {
+  modal.removeEventListener("keydown", trapTab);
+  modal.removeAttribute("aria-modal");
+  if (focusBeforeDialog && document.contains(focusBeforeDialog)) focusBeforeDialog.focus();
+  focusBeforeDialog = null;
+}
+
+/** Watch `hidden` on the modals and on the filter drawer, and react once. */
+function setupDialogAccessibility() {
+  const observer = new MutationObserver((records) => {
+    for (const r of records) {
+      const el = r.target;
+      const open = !el.classList.contains("hidden");
+      if (el.classList.contains("modal")) {
+        if (open && !el.hasAttribute("aria-modal")) dialogShown(el);
+        else if (!open && el.hasAttribute("aria-modal")) dialogHidden(el);
+      }
+    }
+  });
+  document.querySelectorAll(".modal").forEach((m) => {
+    m.setAttribute("role", "dialog");
+    observer.observe(m, { attributes: true, attributeFilter: ["class"] });
+  });
+
+  // The filter drawer is a dialog too: it covers the page and closing it must
+  // hand focus back to the button that opened it.
+  const filters = $("#filters");
+  const toggle = $("#filter-toggle");
+  if (filters && toggle) {
+    filters.setAttribute("role", "dialog");
+    filters.setAttribute("aria-label", tr("Filters"));
+    toggle.setAttribute("aria-expanded", "false");
+    new MutationObserver(() => {
+      const open = filters.classList.contains("open");
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open) {
+        filters.setAttribute("aria-modal", "true");
+        filters.addEventListener("keydown", trapTab);
+        const items = visibleFocusable(filters);
+        if (items.length) items[0].focus();
+      } else if (filters.hasAttribute("aria-modal")) {
+        filters.removeAttribute("aria-modal");
+        filters.removeEventListener("keydown", trapTab);
+        toggle.focus();
+      }
+    }).observe(filters, { attributes: true, attributeFilter: ["class"] });
+  }
+}
+
 function setupMobileFilters() {
   const filters = $("#filters");
   const toggle = $("#filter-toggle");
@@ -1687,6 +1799,7 @@ function bindUI() {
   if (state.uiBound) return;
   state.uiBound = true;
   setupMobileFilters();
+  setupDialogAccessibility();
 
   document.querySelectorAll(".media-btn").forEach((btn) => {
     btn.onclick = () => switchMedia(btn.dataset.media);

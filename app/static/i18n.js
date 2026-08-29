@@ -243,6 +243,12 @@ const LOCALES = {
     "Trawlarr could not load its settings. Check the container logs, then restart it. See the README.":
       "Trawlarr n'a pas pu charger sa configuration. Consultez les logs du conteneur, puis redémarrez-le. Voir le README.",
     "Technical details": "Détails techniques",
+    "Skip to results": "Aller aux résultats",
+    "Results": "Résultats",
+    "Add to your library": "Ajouter à la bibliothèque",
+    "Title details": "Détails du média",
+    "Auto-list preview": "Aperçu de la liste",
+    "Spoken summary": "Résumé audio",
     // --- generic
     "Failed": "Échec",
     "Error": "Erreur",

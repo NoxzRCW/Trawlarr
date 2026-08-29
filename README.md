@@ -245,7 +245,9 @@ and the reason behind every error.
 ## Contributing
 
 Issues and pull requests are welcome — bug reports, new filters, translations,
-or provider integrations. Keep changes focused and the frontend dependency-free.
+or provider integrations. [CONTRIBUTING.md](CONTRIBUTING.md) covers running it
+locally, what gets merged easily, and what will be turned down. Security
+problems go through [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Credits
 
